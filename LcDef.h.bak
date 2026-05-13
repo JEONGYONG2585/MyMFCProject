@@ -1,0 +1,434 @@
+#ifndef __LCDEF_H__
+#define	__LCDEF_H__
+
+#define MAX_VISION		3 // Yamary...20140507
+#define MAX_PATTERN		256
+#define MAX_NOZZLE		16
+#define MAX_PANEL		300
+
+#define MAX_X_PITCH			10
+#define N_MAX_NOZZLE		8
+#define N_NOZZLE_PITCH      4.0
+
+//2014.11.27 by tskim 
+#define MAX_PATTERN_FOR_RMS		8
+
+// Drop Data 변수들
+typedef struct tagDropData
+{
+	double m_dPointX;
+	double m_dPointY;
+	int m_nN;
+	int m_nZ[MAX_NOZZLE];
+	int m_nAddDel[MAX_NOZZLE];
+} DROP_DATA;
+
+// Data Editor에 잇는 변수들
+typedef struct tagDataEditor
+{
+	double m_dGlassSizeX;		// glass size X
+	double m_dGlassSizeY;		// glass size Y
+	double m_dThickness;		// glass 두께
+	long m_nPatternNum;			// 패턴 갯수
+	double m_dHomeX;			// home의 x
+	double m_dHomeY;			// home의 y
+	CString m_strComment;		
+	long m_nSequenceCount;
+	long m_nSetDispense;
+	BOOL m_bPatternDispensing;
+	BOOL m_bNgDropping;
+	BOOL m_bRecipeNoCompare;
+	BOOL m_bLCQuanReportPlus;
+	BOOL m_bLCQuanReportMinus;
+	CString m_strLcType[MAX_NOZZLE];
+	BOOL m_bVolCon[MAX_NOZZLE];
+	BOOL m_bIsTrfOnlyMode;
+	long m_nDropRepeatCnt;
+	CString m_strBarcode[MAX_NOZZLE];
+	BOOL m_bAddDelChange;
+	BOOL m_bAddDelCompare;
+	int m_nLcSupplyType;
+	int m_nDummyType;
+	BOOL m_bSpecialInfo;
+	BOOL m_bSafetyLock;
+	BOOL m_bGlassCheck;
+	BOOL m_bSelectDropMode;
+	int m_nLinePatternNumber;
+	BOOL m_bMarkAlignInsp;
+	double m_dMarkX[2];
+	double m_dMarkY[2];
+	int m_nMarkAlignInspInterval;
+	int m_nCamLightSet[2];
+	long	m_nCamScore;
+	BOOL m_bInteractiveDrop;
+	double  dAlignOffsetX;
+	double  dAlignOffsetY;
+
+	BOOL m_bWorkMove;		//ehji 141125
+	BOOL m_Drop_Limit;		//20160421
+
+	BOOL m_bHeadable[MAX_NOZZLE];	//ehji 150602
+
+	int m_nBranchNzl[MAX_NOZZLE];//0일반 노즐 1:분기(1) 2:분기(2)...
+	int m_nCanisterIndex[MAX_NOZZLE];//헤드별 해당 Canister를 지정한다..단 연속이며,stroke에 위배 되지 않도록...
+	int m_nCalibrationMode;// 0 : Adjust  1 : 3 point 2 : Full Point(For Flexible)
+	int m_nNzlMode;// 0 : 1 Nzl 1 : TJD-N 2: Multi Nzl
+	BOOL m_bUse_Vision; 
+	BOOL m_bMove_Unload; 
+
+	BOOL m_bMMGLineDropMode; 
+
+	int m_nLineDropNumber[MAX_NOZZLE];
+	float m_dSuctionVolumn[MAX_NOZZLE];
+	int m_nBlockNumber[MAX_NOZZLE];
+	int m_nFlexCalibrationMaxBlockNum;
+
+	int m_nGroupLineDrop;//2014.03.24 by tskim Group별 Line Drop 사용 여부 Check 0: OFF, 1: ON
+	int m_nLineDropBlockNum[MAX_NOZZLE];//2014.03.25 by tskim Line Drop시 Drop Block 설정 측정시 활용...
+	int m_nMaxLineDropBlockNum;//2014.03.25 by tskim
+
+//160903 DUAL INTENSITY //160929 JYKIM
+	BOOL m_bDualIntensity; 
+//160903 SAMPLING SCAN //160929 JYKIM
+	BOOL m_bSamplingScan; 
+} DATA_EDITOR;
+
+// Adjust Condition에 있는 변수
+typedef struct tagAdjustCondition
+{
+	double dSpeed;			//
+	int nDelay;				//
+	float fDropStartPos;		// Drop Start Posion 조정
+	long nDummyDropTime;
+	long nDummyDropCount;
+	UINT nCheckingIntervalSheet;
+	BOOL bAdjustInAuto;	// auto 구동중에 adjust
+	BOOL bDummyDropBeforeMeasInAuto;	// auto 구동 중에 측정전 Dummy Drop
+	long nAdjustTimes;
+	double dTargetWeight[MAX_NOZZLE];
+	double dTargetError[MAX_NOZZLE];
+	double dTargetErrorAlarm[MAX_NOZZLE];
+	double dTargetErrorJudgePlus[MAX_NOZZLE];	// 추가 : 판정값 변경에 관한 조건
+	double dTargetErrorJudgeMinus[MAX_NOZZLE];	// 추가 : 판정값 변경에 관한 조건
+	int nDropCount[MAX_NOZZLE];
+	int nLoopCount[MAX_NOZZLE];
+	int nMeasureCycle;
+	int nSpecIn[MAX_NOZZLE];
+	float nCanisterEmgWeight; //090702 액정 경고량 설정치
+	int nLiquidSupplyLimit; //090702 // 액정 공급량 Limit 설정치
+	UINT nCheckDegasSheet; //by shin//09.08.18//Auto Deags 주기 추가...//
+	int nDegasCount;
+//2011.04.27 by tskim
+	double dAbnormalTargetError[MAX_NOZZLE];
+
+	double dAdjustPulse;//N-Type Adjust시 초기 참조 값.... Adjust시 초기 P축 토출 속도를 정한다..
+
+//2011.05.12 by tskim
+	double dMultiTarget[MAX_NOZZLE][10];
+	int nMultiTargetCnt[MAX_NOZZLE];
+	double dMarginRate;
+
+	double dCalibrationInterlock; 
+	double dMultiTargetRate[MAX_NOZZLE][10];
+
+//2011.11.27 by tskim measinterval
+	int m_n1stMeas;
+	int m_n2ndMeas;
+
+//150527 ehji
+	double m_dDistperdropEmergency;
+	double m_dPulseLimit_P[MAX_NOZZLE];//Target Weight Pulse (+)
+	double m_dPulseLimit_M[MAX_NOZZLE];//Target Weight Pulse (+)
+
+} ADJUST_CONDITION;
+
+// Dummy Dischaege Condition에 있는 변수
+/*
+typedef struct tagDummyDischargeCondition
+{
+	int nNozzleCleaning;		// cleaning 횟수 
+	int nCleaningTimer;			// cleaning 시간
+	int nCleaningDelay;			// cleaning Delay시간
+	BOOL   bNozzleCleaning;
+} DUMMY_DISCHARGE_CONDITION;
+*/
+// Recipe 데이타 관리 변수
+typedef struct tagRecipeData
+{
+	CString strFrontRecipeName;
+	CString strBackRecipeName;
+	double dRecipeSizeX;
+	double dRecipeSizeY;
+}RECIPE_DATA;
+
+// Pattern Data에 있는 패턴별 유형
+typedef struct tagPatternData
+{
+	double m_dCenterPositionX;
+	double m_dCenterPositionY;
+	double m_dWidthX;
+	double m_dWidthY;
+	long m_nPointNumberX;
+	long m_nPointNumberY;
+	long m_nDroppingNum;
+	double m_dAngleX;
+	double m_dAngleY;
+	int m_nDroppingStartPos;
+	int m_nStartDroppingAng;
+		
+	int m_nDispenseMode;
+	double m_nTableSpeed;//int m_nTableSpeed;
+	int m_nSAxisSpeed;
+	double m_dDropWeight[MAX_NOZZLE];
+	BOOL m_bIsOnHead[MAX_NOZZLE];
+	long m_nDropDataCount;			// 실제 현재 패턴의 drop data 갯수를 보관
+
+	// Pattern Condition에 있는 일부 데이타
+	long m_nSequence;
+	double m_dNozzleOffset[MAX_NOZZLE];
+	long m_nPanelNo[MAX_NOZZLE];
+
+	// MMG 관련
+	BOOL m_bMMG;
+	double m_dBaseWeight;
+	double m_dLevelWeightDifference;
+
+	double m_dDropOffset;
+	double m_dDischargeSpeed;//int m_dDischargeSpeed;
+	int m_dSuctionSpeed;
+	int m_nSuctionMode;
+	int m_dAccTime;
+	int m_dDecTime;
+	int m_dStartSpeed;	
+	int m_nSuctionLineNo;	
+	int LinePatNum;
+	long m_nSequence_R;
+
+	int m_nNShot;  //Cell별 1Line당 떨구어야 될 drop 수(1nozzle 기준)
+	double m_dNHz; //Cell별 n-type 동작 속도 // Pitch,shot수,gantry speed에 의해 결정됨...
+	double m_dNShotActionTime; //Cell별 1Line에 대한 n-type 동작 시간//start-end point간 거리,gantry 속도에 의해 결정됨..
+	double m_dNShotPitch; //Cell별 N-Shot간 간격 //start-end point, drop수에 의해 결정됨...
+
+	int m_nNAmplitude[MAX_NOZZLE];
+	int m_nNNegOffset[MAX_NOZZLE];
+	double m_dNDuty[MAX_NOZZLE];
+	int m_nNFirstVoltage[MAX_NOZZLE];
+	int m_nNRunLimit[MAX_NOZZLE];
+	int m_nNFallingEdge[MAX_NOZZLE];
+	int m_nNPAxisOffset[MAX_NOZZLE];
+	int m_nNRunDelay[MAX_NOZZLE];//2015.07.08 by tskim RunDelay
+	double m_dTargetWeight_ByPattern[MAX_NOZZLE];//2015.07.08 by tskim Pattern별 Target Weight 
+}PATTERN_DATA;
+
+// Blob 관련 변수들 
+typedef struct tagBLOBPARAMETER	 
+{
+	double m_dObjectArea; // 카메라를 통해 인식된 물체의 면적
+	double m_dObjectCenterX; // Object의 X 축 중심점 
+	double m_dObjectCenterY; // Object의 Y 축 중심점 
+
+	double m_dRef1CenterY;	// Reference1 의 중심점 Y
+	double m_dRef2CenterY;  // Reference2 의 중심점 Y 
+
+	BOOL m_bObjectExist;  // Dot 유무 확인 
+
+	double m_dOffsetAdjustY;	// 조정해야 할 Offset 값 
+} BLOBPARAMETER;
+
+typedef struct tagLineData
+{
+	double m_dPointX;
+	double m_dPointY;
+	int m_nN;
+	int m_nZ[MAX_NOZZLE];
+	int m_nAddDel[MAX_NOZZLE];
+	int PatNo;
+	int DropCount;
+	int LineCount;//DropCount, LineCount
+	int DropDirection;
+	int DropSeq;
+	int DropNum;
+	int LinePat;
+	int PatSeq;
+	BOOL DropStatus; 
+} LINE_DATA;
+
+//2010.05.17 by tskim EC&RMS
+typedef struct tagECInform
+{
+	double m_dDmyPos_S[MAX_NOZZLE];		// DMY POS S	S1~S16 더미 토출 위치 l4	mm
+	double m_dDmyPos_Col;				// DMY POS COL	Column 더미 토출 위치 l4	mm
+	double m_dMeasPos_S[MAX_NOZZLE];	// MEAS POS S	S1~S16 측정 위치 l4	mm
+	double m_dMeasPos_Col;				// MEAS POS COL	Column 측정 위치 l4	mm
+	double m_dMutePos_Col[3];			// MUTE POS COL	Column Muting 위치 1~3 l4	mm
+	double m_dMarkPos_S1;				// ALIGN POS S1	S1 Mark Align 확인 위치 l4	mm
+	double m_dMarkPos_S16;				// ALIGN POS S16	S16 Mark Align 확인 위치 l4	mm
+	double m_dMarkPos_Col;				// ALIGN POS COL	Column Mark Align 확인 위치 l4	mm
+	double m_dSensingTime[3];			// SENS TIME	Sensor 감지 시간 1~3 l4	msec
+	double m_dCntPos_Col;				// CNT POS COL	Column 중심 위치 l4	mm
+	double m_dOperPos_Col;				// OP POS COL	Column 작업자 위치  l4	mm
+	double m_dLoadPos_F;				// LD POS F	반출,입 위치 Front l4	mm
+	double m_dLoadPos_R;				// LD POS R	반출,입 위치 Rear l4	mm
+	double m_dSupPos_S[MAX_NOZZLE];		// SUP POS S	S1~S16 중앙 공급 위치 l4	mm
+	double m_dSupPos_Col;				// SUP POS COL	Column 중앙 공급 위치 l4	mm
+	double m_dSupAmount;				// SUP PARA 1	중앙공급량 l2	g
+	double m_dSupTime;					// SUP PARA 2	중앙공급시간 l2	sec
+	double m_dTriggerTime[3];			// TRIGGER TIME	Trigger Time1~3 l2	sec
+	double m_dInputLimit[2];			// INPUT LIMIT	투입 제한 시간1~2 l2	sec
+	double m_dColSpd;					//COL MOVE SPD	Column 이동 속도 l2	mm/sec
+} EC_INFORM;
+
+//2013.08.21 by tskim 
+typedef struct tagMachineInfo
+{
+	CString m_strMachineNo;
+	CString m_strLineNo;
+	CString m_strSite;
+} MACHINE_INFO;
+
+typedef struct tagVisionData
+{
+	int nTotal_Over;
+	int nTotal_Miss;
+	int nCell_Over;
+	int nCell_Miss;
+	double dScanX;
+	double dScanY;
+	int nIntensity[MAX_VISION];
+	double dGlass_Intensity;
+	double dDrop_Size[2];
+	int nNozzle_No;
+	double dNozzle_Pitch;
+	double dK_Speed;
+	BOOL bReverse;
+	BOOL bGlass_Reverse;
+	int nGlass_Over;
+	int nSeal_Over;
+	int nLight;
+	double dGlass_Size[2];
+	double dCell_Rate;
+	double dGlass_Area;
+	double dScan_Start;
+	double dScan_End;
+
+	double dXPosOffset[MAX_NOZZLE]; 
+	double dYPosOffset[MAX_NOZZLE]; 
+
+	int    nScanCycle;
+
+	int    nFirstScanCycle;		//ehji 141115
+//2014.05.07 by tskim
+	int m_nPanelMissShot[MAX_PANEL][2];//0:spec.1, 1:spec.2
+
+	//140806
+	int nDummy_Distance;
+	double dDummy_Min_Size[2]; // X : 0 , Y : 1
+	double dDummy_Max_Size[2]; // X : 0 , Y : 1
+
+	int nDummy_Intensity[3]; // 1 : 0 , 2 : 1 , 3 : 2
+
+	int nMain_Intensity[3];	// 1 : 0 , 2 : 1 , 3 : 2  //ehji 141210
+
+}VISION_DATA;
+
+
+typedef struct tagNVision
+{
+	int m_nScan_Cycle;
+	int m_nTotal_Permit_Over; // Cell 영역 전체...
+	int m_nTotal_Permit_Miss; // Cell 영역 전체...
+	int m_nCell_Permit_Over;
+	int m_nCell_Permit_Miss;
+	UINT m_nIntensity[MAX_VISION]; // Yamary...20140507
+	UINT m_nEdge_Intnsity;
+	double m_dDrop_Size_X[MAX_VISION];
+	double m_dDrop_Size_Y[MAX_VISION];
+	UINT m_nNozzle_No;
+	double m_dNozzle_Pitch;
+	int m_nK_Vel;
+	double m_dDist_Permit_X;
+	double m_dDist_Permit_Y;
+	UINT m_nGlass_Permit_Over;
+	UINT m_nSeal_Permit_Over;
+	BOOL m_bReverse; // 1 : 반전 , 0 : 비반전 ...
+	BOOL m_bEdge_Reverse; // 1 : 반전 , 0 : 비반전 ...
+	int m_nLight_Con; // 조명 밝기... 마이너스 값이면 Vision 설정 값 적용... ( 0 ~ 255 )
+	double m_dGlass_Size_X;
+	double m_dGlass_Size_Y;
+	double m_dCell_Rate;
+	double m_dEdge_Size;
+	double m_dDrop_Close[MAX_VISION];
+
+	double m_dScan_Start_Pos;
+	double m_dScan_Dist;
+	int m_nScan_Speed;
+	int m_nDisp_Rate;
+	BOOL m_bDir_TTB;
+	int m_nFirst_Scan_Cycle;
+
+	int m_nCirculaty; 
+	int m_nDetect_Rate; 
+
+//160903 DUAL INTENSITY //160929 JYKIM
+	double m_dDrop_Size_High_X[MAX_VISION];
+	double m_dDrop_Size_High_Y[MAX_VISION];
+	UINT m_nIntensityHigh[MAX_VISION]; 
+
+//161219 PART SCAN
+	BOOL m_bPartScanMode; //JYKIM 161219 PART SCAN 180K
+	int m_nPartScanLineCount; 
+}NVISION_PARAM; //WINGS_VISION ADD
+
+//2011.05.12 by tskim 	// calibration 관련
+typedef struct tagCalibrationData
+{
+	double dMeasure1[MAX_MEADATA_FORCALIB][2];	
+	double dMeasure2[MAX_MEADATA_FORCALIB][2];
+	double dMeasure[MAX_MEADATA_GETCOUNT1][2];
+	double dMeasureFlexible[MAX_MEADATA_GETCOUNT2][4];
+	double dMeasureFlexibleFirst[MAX_MEADATA_GETCOUNT2][4];
+
+	double dCoefficient1[MAX_MEADATA_FORCALIB];
+	double dCoefficient2[MAX_MEADATA_FORCALIB];
+	double dCoefficient3[6];
+	double dMeasure3[6][2];
+	int nCalibCountMin;
+	int nCalibCountBase;
+	int nCalibCountMax;	
+
+	double dFGradOffset[MAX_MEADATA_GETCOUNT2];
+	double m_dFlexDropOffset[MAX_MEADATA_GETCOUNT2];
+	double m_dCompensationDist[100];
+	double m_dDiffSuctionDist[100];
+//2009.03.26 by tskim Tuning시 구간구분을 위해 사용한다.
+	int m_SectionNum[100][2];//[nPumpSectionNum][0]:Start[nPumpSectionNum][1]:End
+//2009.04.02 by tskim Standard Data
+	double	m_dRefSuctionDist[100];
+
+//2015.01.24 by tskim Section Calibration
+	double dMeasureSection[MAX_MEADATA_GETCOUNT3][4];//0:/측정 값, 1:/Pulse, 2:/구간 기울기(mg/pulse), 3:/평균기울기
+	double dMeasureFirstSection[MAX_MEADATA_GETCOUNT3][4];//1section만 Calibration 하는 경우. 
+} CALIBRATIONDATA;
+
+//2014.04.21 by tskim TPD
+// typedef struct TagTPD
+// {
+// 	int m_nMotorLoadK[2];
+// 	int m_nMotorLoadS[MAX_NOZZLE];
+// } TPD;
+
+//2015.02.10 by tskim MotorLoad
+typedef struct TagMotorload
+{
+	int m_nMotorLoadK[4];//K_Axis
+	int m_nMotorLoadS[MAX_NOZZLE];//S_Axis
+	int m_nMotorLoadZ[MAX_NOZZLE];//Z_Axis
+	int m_nMotorLoadTH;
+}MOTORLOAD;
+
+typedef enum Document_ErrCode
+{
+	OK = 0,
+	NG,	
+}ERR_CODE;
+#endif

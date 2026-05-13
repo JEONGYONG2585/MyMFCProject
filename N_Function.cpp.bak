@@ -1,0 +1,646 @@
+// N_Function.cpp: implementation of the CN_Function class.
+//
+//////////////////////////////////////////////////////////////////////
+
+#include "stdafx.h"
+#include "p8ca_lcdisp.h"
+#include "N_Function.h"
+#include "MainFrm.h"
+#include "P8CA_LcDispDoc.h"
+
+#ifdef _DEBUG
+#undef THIS_FILE
+static char THIS_FILE[]=__FILE__;
+#define new DEBUG_NEW
+#endif
+
+
+extern CString g_strLogPath;
+//////////////////////////////////////////////////////////////////////
+// Construction/Destruction
+//////////////////////////////////////////////////////////////////////
+
+CN_Function::CN_Function()
+{
+	pPiezoDevice = new CPiezoDevice();
+
+	m_nRtn_Err_Code = -1;
+
+	int i,nCnt;
+	int nLine,nMachine,nHead,nMaterial,nTarget;	
+
+	for ( int nModuleCount = 0; nModuleCount < MAX_MODULE; nModuleCount++ )
+	{
+		m_structModuleData_Get[nModuleCount].strModuleID = ""; 
+		m_structModuleData_Set[nModuleCount].strModuleID = ""; 
+
+		for ( int nHeadCount = 0; nHeadCount < MAX_NOZZLE; nHeadCount ++ )
+		{
+			m_structModuleData_Get[nModuleCount].nAmplitude_Offset = 0; 
+			m_structModuleData_Get[nModuleCount].nDuty_Offset      = 0; 
+			m_structModuleData_Get[nModuleCount].nFirst_Vol_Offset = 0; 
+			m_structModuleData_Get[nModuleCount].nFrequecy_Offset  = 0; 
+			m_structModuleData_Get[nModuleCount].nNegOffset_Offset = 0; 
+
+			m_structModuleData_Set[nModuleCount].nAmplitude_Offset = 0; 
+			m_structModuleData_Set[nModuleCount].nDuty_Offset      = 0; 
+			m_structModuleData_Set[nModuleCount].nFirst_Vol_Offset = 0; 
+			m_structModuleData_Set[nModuleCount].nFrequecy_Offset  = 0; 
+			m_structModuleData_Set[nModuleCount].nNegOffset_Offset = 0; 
+
+
+
+		}
+	}
+
+	for ( int nHeadCount = 0; nHeadCount < MAX_NOZZLE; nHeadCount ++ )
+	{
+		m_structNParam[nHeadCount].m_strModuleID ="";
+		m_structNParam[nHeadCount].m_nNAmplitude_Offset = 0;
+		m_structNParam[nHeadCount].m_dNDuty_Offset = 0;
+		m_structNParam[nHeadCount].m_nNFirstVoltage_Offset = 0;
+		m_structNParam[nHeadCount].m_nNNegOffset_Offset = 0;
+
+		for ( int nPatternCount = 0; nPatternCount < 256 ; nPatternCount++)
+		{
+			m_structNParam[nHeadCount].m_nNAmplitude[nPatternCount] = 0;
+			m_structNParam[nHeadCount].m_dNDuty[nPatternCount] = 0;
+			m_structNParam[nHeadCount].m_nNFirstVoltage[nPatternCount] = 0;
+			m_structNParam[nHeadCount].m_nNNegOffset[nPatternCount] = 0;
+		}
+	}
+
+	m_hTimeEvent = CreateEvent(NULL,FALSE,FALSE,NULL);
+}
+
+CN_Function::~CN_Function()
+{
+
+}
+
+int CN_Function::Set_NParameter(int nSlaveNo, PIEZO_PARAM Param)
+{
+	m_nRtn_Err_Code = -1;
+	pPiezoDevice->m_nSlave = nSlaveNo;
+
+	if(!pPiezoDevice->Connect())
+	{
+		return	m_nRtn_Err_Code = 1;
+	}
+
+	if(!pPiezoDevice->Write_Param(Param))
+	{
+		return m_nRtn_Err_Code = 2;
+	}
+
+	return m_nRtn_Err_Code; 
+}
+
+int CN_Function::Get_NParameter(int nSlaveNo, PIEZO_PARAM Param)
+{
+	m_nRtn_Err_Code = -1;
+	pPiezoDevice->m_nSlave = nSlaveNo;
+
+	if(!pPiezoDevice->Connect())
+	{
+		return	m_nRtn_Err_Code = 1;
+	}
+
+	if(!pPiezoDevice->Read_Param(&Param))
+	{
+		return m_nRtn_Err_Code = 2;
+	}
+
+	return m_nRtn_Err_Code; 
+}
+
+BOOL CN_Function::N_Initialize()
+{	
+	pPiezoDevice->m_nPort  = N_PORT;
+	pPiezoDevice->m_nSlave = 0;
+	pPiezoDevice->m_nBaudrate = 115200;
+
+	
+	pPiezoDevice->Set_Port(pPiezoDevice->m_nPort, pPiezoDevice->m_nBaudrate, pPiezoDevice->m_nSlave);
+
+	return TRUE;
+}
+
+void CN_Function::Copy_NParameter(int nSlaveNo, PIEZO_PARAM ParamOrg, PIEZO_PARAM ParamDest)
+{
+	int nSize = sizeof(ParamDest);
+	memcpy(&ParamDest,&ParamOrg,nSize);
+}
+
+int CN_Function::Read_Module_DB(CString strRecipeNo)
+{
+	CMainFrame *pFrame = (CMainFrame*)AfxGetMainWnd();
+	CP8CA_LcDispDoc *pDoc = (CP8CA_LcDispDoc*)pFrame->GetActiveDocument();
+
+	int ReturnCode = -1;
+	FILE *fp;
+	CString strPathName;
+	char ch[512];
+	int i=0,j=0;
+	CString strTemp = "";
+	int nCnt,nLength;
+
+	m_mmTimer.Reset();
+	m_mmTimer.Start(1,1,m_hTimeEvent);
+
+	strPathName.Format("D:\\TOP\\P8CA_LC\\N_MODULE_DB\\%s.csv", strRecipeNo);
+
+	if((fp = fopen((char*)(LPCSTR)strPathName,"r")) == NULL)
+	{
+		AfxMessageBox("File not found!", MB_ICONQUESTION);
+		return ReturnCode;
+	}
+
+	fgets(ch,1024,fp);
+
+	strTemp = CString(ch);
+
+	while( !feof( fp ) )
+	{
+		if( i == MAX_RECIPE )
+		{
+			break;
+		}
+
+		fgets(ch,1024,fp);
+
+		strTemp = CString(ch);
+
+		nLength = strTemp.GetLength();
+		nCnt = strTemp.FindOneOf(",");
+
+//		strTemp = strTemp.Mid(nCnt+1,nLength);
+//		nCnt = strTemp.FindOneOf(",");
+
+		m_structModuleData_Get[i].strModuleID = strTemp.Mid(0,nCnt);
+		m_structModuleData_Set[i].strModuleID = m_structModuleData_Get[i].strModuleID; 
+
+		strTemp = strTemp.Mid(nCnt+1,nLength);
+		nCnt = strTemp.FindOneOf(",");
+
+		m_structModuleData_Get[i].nAmplitude_Offset = atoi(strTemp.Mid(0,nCnt));
+		m_structModuleData_Set[i].nAmplitude_Offset = m_structModuleData_Get[i].nAmplitude_Offset; 
+
+		strTemp = strTemp.Mid(nCnt+1,nLength);	
+		nCnt = strTemp.FindOneOf(",");
+
+		m_structModuleData_Get[i].nNegOffset_Offset = atoi(strTemp.Mid(0,nCnt));
+		m_structModuleData_Set[i].nNegOffset_Offset = m_structModuleData_Get[i].nNegOffset_Offset;
+
+		strTemp = strTemp.Mid(nCnt+1,nLength);	
+		nCnt = strTemp.FindOneOf(",");
+
+		m_structModuleData_Get[i].nDuty_Offset = atoi(strTemp.Mid(0,nCnt));
+		m_structModuleData_Set[i].nDuty_Offset = m_structModuleData_Get[i].nDuty_Offset;
+
+		strTemp = strTemp.Mid(nCnt+1,nLength);	
+		nCnt = strTemp.FindOneOf(",");
+
+		m_structModuleData_Get[i].nFirst_Vol_Offset = atoi(strTemp.Mid(0,nCnt));
+		m_structModuleData_Set[i].nFirst_Vol_Offset = m_structModuleData_Get[i].nFirst_Vol_Offset; 
+
+		i++;
+	}
+	fclose(fp);
+
+	m_mmTimer.Stop();
+
+	m_strNLog.Format("Read_Module_DB %s %d",strRecipeNo,m_mmTimer.GetTotalMilliseconds());
+	Save_N_Log(0,m_strNLog);
+
+	return ReturnCode;
+}
+
+int CN_Function::Save_Module_DB(CString strRecipeNo)
+{
+	CMainFrame *pFrame = (CMainFrame*)AfxGetMainWnd();
+	CP8CA_LcDispDoc *pDoc = (CP8CA_LcDispDoc*)pFrame->GetActiveDocument();
+
+	int ReturnCode = -1;
+	FILE *fp;
+	CString strPathName;
+	int i,nLength,nCnt;
+	int nLine,nMachine,nHead,nMaterial,nTarget;
+
+	CFileFind filefind;
+	CFileException e;
+	CString strText;
+
+	CTime t = CTime::GetCurrentTime();
+
+	m_mmTimer.Reset();
+	m_mmTimer.Start(1,1,m_hTimeEvent);
+
+
+	CString strFileName, strDirName, str;
+	BOOL bIsDir = FALSE;
+	BOOL bContinue = TRUE;
+
+	// 디렉토리 탐색
+	
+	filefind.FindFile("D:\\TOP\\P8CA_LC\\*.*");
+	bIsDir = FALSE;
+	bContinue = TRUE;
+	while(bContinue)
+	{
+		bContinue = filefind.FindNextFile();
+		if(filefind.IsDirectory())
+		{
+			strDirName = filefind.GetFileName();
+			if(strDirName == "N_MODULE_DB")
+			{
+				bIsDir = TRUE;
+				break;
+			}
+		}
+	}
+	
+	filefind.Close();
+	
+	if(!bIsDir)	_mkdir("D:\\TOP\\P8CA_LC\\N_MODULE_DB");
+	
+	strPathName.Format("D:\\TOP\\P8CA_LC\\N_MODULE_DB\\%s.csv", strRecipeNo);
+
+	fp = fopen(strPathName, "wt");
+
+	if(fp != NULL)
+	{
+		fprintf(fp,"%s,","ModuleID#1");
+		fprintf(fp,"%s,","Amplitude_Offset");
+		fprintf(fp,"%s,","NegOffset_Offset");
+		fprintf(fp,"%s,","Duty_Offset");
+		fprintf(fp,"%s,","First_Vol_Offset");
+		fprintf(fp,"\n");
+
+		for ( int nModuleCount = 0; nModuleCount < MAX_MODULE; nModuleCount++ )
+		{
+			fprintf(fp,"%s,",m_structModuleData_Set[nModuleCount].strModuleID);
+			fprintf(fp,"%d,",m_structModuleData_Set[nModuleCount].nAmplitude_Offset);
+			fprintf(fp,"%d,",m_structModuleData_Set[nModuleCount].nNegOffset_Offset);
+			fprintf(fp,"%f,",m_structModuleData_Set[nModuleCount].nDuty_Offset);
+			fprintf(fp,"%d,",m_structModuleData_Set[nModuleCount].nFirst_Vol_Offset);
+			fprintf(fp,"\n");
+		}
+	}
+	else
+	{
+		
+	}
+	fclose(fp);
+
+	m_mmTimer.Stop();
+
+	m_strNLog.Format("Save_Module_DB %s %d",strRecipeNo,m_mmTimer.GetTotalMilliseconds());
+	Save_N_Log(0,m_strNLog);
+
+	return ReturnCode;
+}
+
+// int CN_Function::Get_Module_DB(CString strModuleID, int nHeadNo)
+// {
+// 	CMainFrame *pFrame = (CMainFrame*)AfxGetMainWnd();
+// 	CP8CA_LcDispDoc *pDoc = (CP8CA_LcDispDoc*)pFrame->GetActiveDocument();
+// 
+// 	int RtnCode = -1;
+// 	int i;
+// 	int nLength;
+// 	CString strTemp;
+// 	int nLine,nMachine,nHead,nMaterial,nTarget;
+// 	int nCnt;
+// 	m_strModuleInformation.Empty();
+// 
+// 	m_strModuleInformation += strModuleID;
+// 	nLength = pDoc->m_structMachineInfo.m_strLineNo.GetLength();
+// 	if(nLength < 2)
+// 		m_strModuleInformation += "0"+pDoc->m_structMachineInfo.m_strLineNo;
+// 	else
+// 		m_strModuleInformation += pDoc->m_structMachineInfo.m_strLineNo;
+// 	nLength = pDoc->m_structMachineInfo.m_strMachineNo.GetLength();
+// 	if(nLength < 2)
+// 		m_strModuleInformation += "0"+pDoc->m_structMachineInfo.m_strMachineNo;
+// 	else
+// 		m_strModuleInformation += pDoc->m_structMachineInfo.m_strMachineNo;	
+// 	strTemp.Format("%02d",nHeadNo+1);
+// 	m_strModuleInformation += strTemp;
+// 	nLength = pDoc->m_structDataEditor.m_strBarcode[nHeadNo].GetLength();
+// 	strTemp = pDoc->m_structDataEditor.m_strBarcode[nHeadNo];
+// 	if(nLength < 7)
+// 	{
+// 		for(i=0;i<7-nLength;i++)
+// 			strTemp = "0"+strTemp;
+// 	}
+// 	else
+// 		strTemp = strTemp;	
+// 	m_strModuleInformation += strTemp;
+// 	strTemp.Format("%.0f",pDoc->m_structAdjustCondition.dTargetWeight[nHeadNo]*1000);
+// 	nLength = strTemp.GetLength();
+// 	if(nLength < 4)
+// 	{
+// 		for(i=0;i<4-nLength;i++)
+// 			strTemp = "0"+strTemp;
+// 	}
+// 	else
+// 		strTemp = strTemp;	
+// 	m_strModuleInformation += strTemp;
+// 
+// 	m_nSetIndex = 0;
+// //Index를 부여 하여 검색DB 수량을 줄인다..
+// 	BOOL bSearchComplete = FALSE;
+// 
+// 	for(nLine=0;nLine<MAX_LINE_NO;nLine++)
+// 	{
+// 		for(nMachine=0;nMachine<MAX_MACHINE_NO;nMachine++)
+// 		{
+// 			for(nHead=0;nHead<MAX_HEAD_NO;nHead++)
+// 			{
+// 				for(nMaterial=0;nMaterial<MAX_MATERIAL_NO;nMaterial++)
+// 				{
+// 					for(nTarget=0;nTarget<MAX_TARGET_NO;nTarget++)
+// 					{
+// 						nCnt= (nLine*MAX_MACHINE_NO*MAX_HEAD_NO*MAX_MATERIAL_NO*MAX_TARGET_NO)+(nMachine*MAX_HEAD_NO*MAX_MATERIAL_NO*MAX_TARGET_NO)+(nHead*MAX_MATERIAL_NO*MAX_TARGET_NO)+(nMaterial*MAX_TARGET_NO)+nTarget;
+// 						if(m_strModuleInformation == m_structModuleData_Get[nCnt].strModuleInfo_Merge)
+// 						{
+// 							RtnCode = 1;//등록 DB 있음.. Overwrite 여부 물어 봐야 함..
+// 							//AfxMessageBox("등록 DB 있음..");
+// 							if(bSearchComplete) continue;
+// 							m_structDBIndex.nDBIndex[nHeadNo] = nCnt;
+// 							bSearchComplete = true;
+// 							break;
+// 						}
+// 					}
+// 				}
+// 			}
+// 		}
+// 	}
+// 	
+// 	return RtnCode;	
+// }
+// //ID	Line No	Machine No	Head No	Material ID	Target
+// //ID	2 	4 	16 	10 	20 //25600
+// int CN_Function::Set_Module_DB(CString strModuleID, int nHeadNo)
+// {
+// 	CMainFrame *pFrame = (CMainFrame*)AfxGetMainWnd();
+// 	CP8CA_LcDispDoc *pDoc = (CP8CA_LcDispDoc*)pFrame->GetActiveDocument();
+// 
+// 	int RtnCode = 0;
+// 	int i;
+// 	int nLength;
+// 	CString strTemp;
+// 	int nLine,nMachine,nHead,nMaterial,nTarget;
+// 	int nCnt;
+// 	m_strModuleInformation.Empty();
+// 
+// 	m_strModuleInformation += strModuleID;
+// 	nLength = pDoc->m_structMachineInfo.m_strLineNo.GetLength();
+// 	if(nLength < 2)
+// 		m_strModuleInformation += "0"+pDoc->m_structMachineInfo.m_strLineNo;
+// 	else
+// 		m_strModuleInformation += pDoc->m_structMachineInfo.m_strLineNo;
+// 	nLength = pDoc->m_structMachineInfo.m_strMachineNo.GetLength();
+// 	if(nLength < 2)
+// 		m_strModuleInformation += "0"+pDoc->m_structMachineInfo.m_strMachineNo;
+// 	else
+// 		m_strModuleInformation += pDoc->m_structMachineInfo.m_strMachineNo;	
+// 	strTemp.Format("%02d",nHeadNo+1);
+// 	m_strModuleInformation += strTemp;
+// 	nLength = pDoc->m_structDataEditor.m_strBarcode[nHeadNo].GetLength();
+// 	strTemp = pDoc->m_structDataEditor.m_strBarcode[nHeadNo];
+// 	if(nLength < 7)
+// 	{
+// 		for(i=0;i<7-nLength;i++)
+// 			strTemp = "0"+strTemp;
+// 	}
+// 	else
+// 		strTemp = strTemp;	
+// 	m_strModuleInformation += strTemp;
+// 	strTemp.Format("%.0f",pDoc->m_structAdjustCondition.dTargetWeight[nHeadNo]*1000);
+// 	nLength = strTemp.GetLength();
+// 	if(nLength < 4)
+// 	{
+// 		for(i=0;i<4-nLength;i++)
+// 			strTemp = "0"+strTemp;
+// 	}
+// 	else
+// 		strTemp = strTemp;	
+// 	m_strModuleInformation += strTemp;
+// 
+// 	m_nSetIndex = 0;
+// //Index를 부여 하여 검색DB 수량을 줄인다..
+// 
+// 	for(nLine=0;nLine<MAX_LINE_NO;nLine++)
+// 	{
+// 		for(nMachine=0;nMachine<MAX_MACHINE_NO;nMachine++)
+// 		{
+// 			for(nHead=0;nHead<MAX_HEAD_NO;nHead++)
+// 			{
+// 				for(nMaterial=0;nMaterial<MAX_MATERIAL_NO;nMaterial++)
+// 				{
+// 					for(nTarget=0;nTarget<MAX_TARGET_NO;nTarget++)
+// 					{
+// 						nCnt= (nLine*MAX_MACHINE_NO*MAX_HEAD_NO*MAX_MATERIAL_NO*MAX_TARGET_NO)+(nMachine*MAX_HEAD_NO*MAX_MATERIAL_NO*MAX_TARGET_NO)+(nHead*MAX_MATERIAL_NO*MAX_TARGET_NO)+(nMaterial*MAX_TARGET_NO)+nTarget;
+// 						if(m_strModuleInformation == m_structModuleData_Get[nCnt].strModuleInfo_Merge)
+// 						{
+// 							RtnCode = 1;//등록 DB 있음.. Overwrite 여부 물어 봐야 함..
+// 							AfxMessageBox("등록 DB 있음..");
+// 							break;
+// 						}
+// 					}
+// 				}
+// 			}
+// 		}
+// 	}
+// 	
+// 	return RtnCode;
+// }
+
+void CN_Function::Save_N_Log(int nKind, CString strLog)
+{
+	CFileFind filefind;
+	FILE *fp;
+	CFileException e;
+
+	if(strLog == "") return;
+
+	CTime t = CTime::GetCurrentTime();
+
+	CString strFileName, strDirName, str;
+	BOOL bIsDir = FALSE;
+	BOOL bContinue = TRUE;
+
+	// 디렉토리 탐색
+	if(nKind==0)
+	{
+		filefind.FindFile(g_strLogPath+"\\*.*");
+		bIsDir = FALSE;
+		bContinue = TRUE;
+		while(bContinue)
+		{
+			bContinue = filefind.FindNextFile();
+			if(filefind.IsDirectory())
+			{
+				strDirName = filefind.GetFileName();
+				if(strDirName == "N_Log")
+				{
+					bIsDir = TRUE;
+					break;
+				}
+			}
+		}
+
+		filefind.Close();
+
+		if(!bIsDir)	_mkdir(g_strLogPath+"\\N_Log");
+		// 날짜 Directory 생성 완료
+
+		strFileName.Format(g_strLogPath+"\\N_Log\\%d-%02d-%02d.log", t.GetYear(), t.GetMonth(), t.GetDay());
+		// 화일 열기
+		fp = fopen((char *)(LPCSTR)strFileName, "at");
+		if(!fp) 
+		{
+			return;
+		}
+		str.Format("%02d시%02d분%02d초 - ", t.GetHour(), t.GetMinute(), t.GetSecond());
+		str += strLog;
+		str += "\n";
+		fprintf(fp, str);
+		fclose(fp);
+
+//Log Back Up
+		filefind.FindFile(g_strLogPath+"\\*.*");
+		bIsDir = FALSE;
+		bContinue = TRUE;
+		while(bContinue)
+		{
+			bContinue = filefind.FindNextFile();
+			if(filefind.IsDirectory())
+			{
+				strDirName = filefind.GetFileName();
+				if(strDirName == "Set-Up")
+				{
+					bIsDir = TRUE;
+					break;
+				}
+			}
+		}
+		if(!bIsDir)	_mkdir(g_strLogPath+"\\Set-Up");
+
+		filefind.FindFile(g_strLogPath+"\\Set-Up\\*.*");
+		bIsDir = FALSE;
+		bContinue = TRUE;
+		while(bContinue)
+		{
+			bContinue = filefind.FindNextFile();
+			if(filefind.IsDirectory())
+			{
+				strDirName = filefind.GetFileName();
+				if(strDirName == "N_Log")
+				{
+					bIsDir = TRUE;
+					break;
+				}
+			}
+		}
+
+		filefind.Close();
+
+		if(!bIsDir)	_mkdir(g_strLogPath+"\\Set-Up\\N_Log");
+		// 날짜 Directory 생성 완료
+
+		strFileName.Format(g_strLogPath+"\\Set-Up\\N_Log\\%d-%02d-%02d.log", t.GetYear(), t.GetMonth(), t.GetDay());
+		// 화일 열기
+		fp = fopen((char *)(LPCSTR)strFileName, "at");
+		if(!fp) 
+		{
+			return;
+		}
+		str.Format("%02d시%02d분%02d초 - ", t.GetHour(), t.GetMinute(), t.GetSecond());
+		str += strLog;
+		str += "\n";
+		fprintf(fp, str);
+		fclose(fp);
+
+		// 한달 이전 Log file은 지워버린다...
+		// 디렉토리 탐색
+		filefind.FindFile(g_strLogPath+"\\N_Log\\*.*");
+		bIsDir = FALSE;
+		bContinue = TRUE;
+		while(bContinue)
+		{
+			bContinue = filefind.FindNextFile();
+			if(!filefind.IsDirectory())
+			{
+				strFileName = filefind.GetFileName();
+				str = strFileName;
+				int nYear, nMonth, nDay;
+				int nYear1, nMonth1, nDay1;
+				nYear = t.GetYear();
+				nMonth = t.GetMonth();
+				nDay = t.GetDay();
+
+				nYear1 = atoi(str.Mid(0, 4));
+				nMonth1 = atoi(str.Mid(5, 2));
+				nDay1 = atoi(str.Mid(8, 2));
+
+				if(nYear1 < nYear) 
+				{
+					::DeleteFile(g_strLogPath+"\\N_Log\\"+strFileName);
+				}
+				if((nMonth1*30+nDay1) < (nMonth*30+nDay-30))
+				{
+					::DeleteFile(g_strLogPath+"\\N_Log\\"+strFileName);
+				}
+			}
+		}
+	}
+}
+
+int CN_Function::Module_Duplication_Check(int nKind, CString strRecipeName , CString strModuleID)
+{
+	BOOL bContinue;
+	CFileFind fileFind;
+	CString strPath;
+	CString strDirName;
+	int temp = 0;
+	int i = 0;
+
+    CString m_strDataPath = "D:\\TOP\\P8CA_LC\\N_MODULE_DB";
+
+	if(nKind == 1)//DB내 중복 파일 Check
+	{
+		// 변수 초기화
+		strPath.Format("%s\\*.*", m_strDataPath);
+		bContinue = TRUE;
+		
+		if(!(bContinue == fileFind.FindFile(strPath)))
+		{
+			CString str;
+			str.Format("%s 폴더를 찾을 수 없습니다!! 실행불가", strPath);
+			AfxMessageBox(str);
+			exit(-1);
+		}
+		
+		Read_Module_DB(strRecipeName); 
+
+		int nModuleID = atoi(strModuleID); 
+
+		if ( strModuleID == m_structModuleData_Get[nModuleID-1].strModuleID)
+		{
+			return 100; 
+		}
+	}
+}
+
+int CN_Function::Registry_Initial_DB(N_MODULE_DATA m_structModuleData_Init)
+{
+	return -1;
+}
+
+int CN_Function::Save_Module_Value_Before()
+{
+	return 0;
+}

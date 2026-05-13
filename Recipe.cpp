@@ -1,0 +1,575 @@
+// Recipe.cpp : implementation file
+//
+
+#include "stdafx.h"
+#include "P8CA_LcDisp.h"
+#include "MainFrm.h"
+#include "P8CA_LcDispView.h"
+
+#include "Recipe.h"
+
+#include <fstream.h>
+#include <math.h>
+
+#include "N_Vision.h"
+
+#include "N_Function.h"			//ehji 141207
+#include "ModuleInfo.h"			//ehji 141207
+#include "ModuleDBRegistry.h"	//ehji 141207
+
+#include "NormalMsg.h"
+
+#ifdef _DEBUG
+#define new DEBUG_NEW
+#undef THIS_FILE
+static char THIS_FILE[] = __FILE__;
+#endif
+
+extern CN_Vision _NVision;
+extern BOOL N_Nozzle_Detect_Flag[MAX_NOZZLE];
+/////////////////////////////////////////////////////////////////////////////
+// CRecipe dialog
+
+extern UINT  g_nInitMeasureGlassCount;
+
+extern BOOL  g_bAceeptSettingStatus; //141113 GLOBAL 변수 선언 
+extern BOOL  g_bCalibrationApply;//20190710 JEONGYONG - Recipe 변경 시 CalibrationApply 초기화
+
+CRecipe::CRecipe(CWnd* pParent /*=NULL*/)
+	: CDialog(CRecipe::IDD, pParent)
+{
+	//{{AFX_DATA_INIT(CRecipe)
+	//}}AFX_DATA_INIT
+	// list 의 폰트 
+	m_fontList = new CFont;
+}
+
+CRecipe::~CRecipe()
+{
+}
+
+void CRecipe::DoDataExchange(CDataExchange* pDX)
+{
+	CDialog::DoDataExchange(pDX);
+	//{{AFX_DATA_MAP(CRecipe)
+	DDX_Control(pDX, IDC_LIST_RECIPE, m_ctrlRecipeList);
+	DDX_Control(pDX, IDC_LABEL_RECIPE_NAME, m_ctrlRecipeName);
+	//}}AFX_DATA_MAP
+}
+
+
+BEGIN_MESSAGE_MAP(CRecipe, CDialog)
+	//{{AFX_MSG_MAP(CRecipe)
+	ON_WM_PAINT()
+	//}}AFX_MSG_MAP
+END_MESSAGE_MAP()
+
+/////////////////////////////////////////////////////////////////////////////
+// CRecipe message handlers
+
+BOOL CRecipe::OnInitDialog() 
+{
+	CDialog::OnInitDialog();
+	
+	// TODO: Add extra initialization here
+	// list 폰트 설정
+	m_fontList->CreateFont(25,15,0,0,NULL,FALSE,FALSE,FALSE,ANSI_CHARSET,
+	OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,DEFAULT_QUALITY, 
+	DEFAULT_PITCH,"굴림체"/*"Lucida Unicode"*/);
+
+	//m_ctrlRecipeList.SetFont(m_fontList, TRUE); 
+	
+	//!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	// by ckh 2008.12.31
+	// CASE : Recipe List Update 
+	CMainFrame *pFrame = (CMainFrame *)AfxGetMainWnd();
+	CP8CA_LcDispDoc *pDoc = (CP8CA_LcDispDoc *)pFrame->GetActiveDocument();
+	CP8CA_LcDispView* pView = (CP8CA_LcDispView*)pFrame->GetActiveView();
+
+	// 기존 m_arRecipeData 데이타를 모두 삭제한다..
+	pDoc->m_arRecipeData.RemoveAll();
+
+	// File Management에서 변경된 내용이 있으므로, Recipe 셋팅을 다시한다.
+	pDoc->FindRecipeData();
+	pDoc->ReadRecipeFile(pDoc->m_structOperatorModeRecipeData.strFrontRecipeName);
+
+	//!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	
+
+	// recipe name 설정
+	SubDisplayRecipeName();
+	// list control 컬럼 설정
+	MakeListView();	
+	// list control에 recipe data 설정
+	SetListData();
+	m_ctrlRecipeList.SetFont(m_fontList, TRUE);
+
+	//by shin//2009.08.31//MC 관련 TAS 추가...//
+	//Recipe Change
+	pView->WriteTasMCData(TAS_MC, 2, BIT_ON); 
+	Sleep(200);
+
+	pView->WriteTasMCData(TAS_MC, 2, BIT_OFF); 
+	Sleep(10);
+
+	UpdateData(FALSE); 
+//	
+	return TRUE;  // return TRUE unless you set the focus to a control
+	              // EXCEPTION: OCX Property Pages should return FALSE
+}
+
+BEGIN_EVENTSINK_MAP(CRecipe, CDialog)
+    //{{AFX_EVENTSINK_MAP(CRecipe)
+	ON_EVENT(CRecipe, IDC_CMD_RETURN, -600 /* Click */, OnClickCmdReturn, VTS_NONE)
+	ON_EVENT(CRecipe, IDC_CMD_RECIPE_LOAD, -600 /* Click */, OnClickCmdRecipeLoad, VTS_NONE)
+	//}}AFX_EVENTSINK_MAP
+END_EVENTSINK_MAP()
+
+void CRecipe::OnClickCmdReturn() 
+{
+	// TODO: Add your control notification handler code here
+	delete m_fontList;
+
+	EndDialog(IDOK);
+}
+
+void CRecipe::OnOK() 
+{
+	// TODO: Add extra validation here
+	
+//	CDialog::OnOK();
+}
+
+void CRecipe::OnCancel() 
+{
+	// TODO: Add extra cleanup here
+	
+//	CDialog::OnCancel();
+}
+
+void CRecipe::OnPaint() 
+{
+	CPaintDC dc(this); // device context for painting
+	
+	// TODO: Add your message handler code here
+	CPen pen;
+	pen.CreatePen(PS_SOLID,5,DARKBLUE);
+	CPen *pOldPen = (CPen *)dc.SelectObject(&pen);
+
+	dc.MoveTo(0,HEIGHT_YPOS);
+	dc.LineTo(SCREEN_WIDTH,HEIGHT_YPOS);
+/*
+	dc.MoveTo(0,SCREEN_HEIGHT - HEIGHT_YPOS);
+*/	dc.LineTo(SCREEN_WIDTH,SCREEN_HEIGHT - HEIGHT_YPOS);
+
+	dc.SelectObject(pOldPen);
+	
+	// Do not call CDialog::OnPaint() for painting messages
+}
+
+void CRecipe::OnClickCmdRecipeLoad() 
+{
+	CMainFrame *pFrame = (CMainFrame *)AfxGetMainWnd();
+	CP8CA_LcDispDoc *pDoc = (CP8CA_LcDispDoc *)pFrame->GetActiveDocument();
+	CP8CA_LcDispView* pView = (CP8CA_LcDispView*)pFrame->GetActiveView();
+
+	CModuleInfo *m_pModuleInfo;		//ehji 141207
+
+	CString str, strTempFrontRecipeName = "" , strTempLog ="";
+	CString strFront, strBack, strPathName;
+	CFile ReadFile;
+
+	POSITION pos;
+	int i;
+	
+	int nModuleID = 0;
+	
+
+	//by shin//2009.08.25//MC 관련 TAS 추가...//
+	//Recipe Load
+	pView->WriteTasMCData(TAS_MC, 3, BIT_ON); 
+	Sleep(200);
+
+	//141113 이전 RECIPE 번호 임시 저장 한다. 
+	strTempFrontRecipeName = pDoc->m_structOperatorModeRecipeData.strFrontRecipeName;
+	/////////////////////////////////////////
+
+
+	// 현재 선택된 Recipe data 알아내기
+	pos = m_ctrlRecipeList.GetFirstSelectedItemPosition();
+	if(pos != NULL)
+	{
+		i = m_ctrlRecipeList.GetNextSelectedItem(pos);
+		str = m_ctrlRecipeList.GetItemText(i, 0);
+		
+		// 선택된 recipe name에서 front와 back로 분리해서 
+		i = str.FindOneOf("|");
+
+		strFront = str.Left(i);
+		strBack = (const char *)str+i+1;
+
+//		pDoc->ReadRecipeFile(strFront);
+//		pDoc->ReadCalSetFile(strFront);
+//2016.05.10 by tskim Recipe No Interlock
+		if(strFront.GetLength() != 3)
+			return;
+
+		for(i =0 ; i < MAX_PATTERN ; i++)
+		pDoc->m_arDropData[i].RemoveAll();
+
+		// 현재 모드별로 이름 변경
+		pDoc->m_structOperatorModeRecipeData.strFrontRecipeName = strFront;
+		pDoc->m_structOperatorModeRecipeData.strBackRecipeName = strBack;
+		pDoc->ReadRecipeFile(strFront);
+
+		// 새롭게 설정된 값 적용
+		SubDisplayRecipeName();
+
+		// recipe을 화일로 저장한다.
+		pDoc->SaveLastRecipe();
+
+		// Recipe 변경 Log 생성
+		str = "Recipe 변경 : ";
+		str += pDoc->m_structOperatorModeRecipeData.strFrontRecipeName;
+		pView->SaveLog(0, str);
+
+		//# 바뀐 Recipe Write..
+		str.Format("%04x",atoi(pDoc->m_structOperatorModeRecipeData.strFrontRecipeName));
+		pView->m_pDevice->MNET_WriteWord(DISP_WORD+0x0B,str,1);
+
+		Sleep(200);
+
+		//!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+		// by ckh 2008.12.31
+		pView->AllRecipeReport(1);
+		//!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+		strPathName.Format("%s\\%s\\PanelNG_MarkSet.dat", pDoc->m_strDataPath,pDoc->m_structOperatorModeRecipeData.strFrontRecipeName);
+		if( ReadFile.Open((char *)(LPCSTR)strPathName, CFile::modeRead ) )
+		{
+			pDoc->m_nSelFile = 5; 
+ 			CArchive ar( &ReadFile, CArchive::load );
+			pDoc->Serialize(ar); 
+			ar.Close();
+			ReadFile.Close();
+		}		
+		//lbg 080604
+		for(i=0;i<MAX_NOZZLE;i++)
+		{
+			CIM_Information.dMeasured1[i] = "270F270F";   // DEC. : 9999
+			CIM_Information.dMeasured2[i] = "270F270F";   // DEC. : 9999
+		}
+//2010.09.24  by tskim
+//		if(pDoc->m_nSite == 1)
+		{
+			pDoc->m_nRecipeEditCode = 2;
+			pView->SendMessage(WM_CIM_REPORT_WORK,8,NULL);
+		}
+
+		pDoc->m_bRecipeChanged = TRUE;//2010.09.09 by tskim Meas Alarm
+		g_nInitMeasureGlassCount = INIT_MEASURE_COUNT;//2010.09.09 by tskim Meas Alarm
+
+		g_nGlassCount=0;//2010.09.09 by tskim
+		g_nGlassCountScanCycle =0;		//ehji 140918
+
+		g_bCalibrationApply = FALSE;//20190710 JEONGYONG - Recipe 변경 시 CalibrationApply 초기화
+		for(i=0;i<MAX_NOZZLE;i++)
+		{
+			N_Nozzle_Detect_Flag[i] = FALSE;
+
+			Drop_Info.bAdjustComplete[i]=FALSE;
+			Drop_Info.bMeasureComplete[i]=FALSE;
+			g_bStatusError[i]=FALSE;//20190712 JEONGYONG - Recipe change -> Measure Reset
+			g_bCalibrationStatus[i]=FALSE; 
+
+			pView->pN_Func->m_structNParam[i].m_strModuleID = "";
+			pView->pN_Func->m_structNParam[i].m_nNAmplitude_Offset = 0;
+			pView->pN_Func->m_structNParam[i].m_dNDuty_Offset = 0;
+			pView->pN_Func->m_structNParam[i].m_nNNegOffset_Offset = 0;
+			pView->pN_Func->m_structNParam[i].m_nNFirstVoltage_Offset = 0;
+
+//					_NVision.Write_CSV_File(_CSV_RECIPE_INFO);		//ehji 141210
+		}
+		////////////////////////////////////////////////
+
+		//141015 BY SHLEE HEAD 별 MAIN/MMG PATTERN 정보 (m_nMMGpatStatus)
+		if ( pDoc->m_structDataEditor.m_bMMGLineDropMode )
+		{
+			int nMMGpatNo[2]={200,200} , nTempMMGpatNo = 0 , nHeadCount ;  // 0: MMG , 1 : MAIN
+
+			for ( int nCount = 0; nCount < pDoc->m_structDataEditor.m_nPatternNum; nCount++ )
+			{
+				if ( pDoc->m_structPatternData[nCount].m_bMMG ) 
+				{
+					nTempMMGpatNo = nCount; 
+					if ( nMMGpatNo[0] > nTempMMGpatNo )
+					{
+						nMMGpatNo[0] = nCount;
+
+						for ( nHeadCount = 0; nHeadCount < 16; nHeadCount++ )
+						{
+							if ( pDoc->m_structPatternData[nCount].m_bIsOnHead[nHeadCount] ) 
+								pDoc->m_nMMGpatStatus[nHeadCount] = nMMGpatNo[0]; 
+						}
+					}
+				}
+				else 
+				{
+					nTempMMGpatNo = nCount; 
+					if ( nMMGpatNo[1] > nTempMMGpatNo )		
+					{
+						nMMGpatNo[1] = nCount;
+
+						for ( nHeadCount = 0; nHeadCount < 16; nHeadCount++ )
+						{
+							if ( pDoc->m_structPatternData[nCount].m_bIsOnHead[nHeadCount] ) 
+								pDoc->m_nMMGpatStatus[nHeadCount] = nMMGpatNo[1]; 
+						}
+					}
+				}
+
+			}
+		}
+
+
+		if(pDoc->m_structDataEditor.m_bUse_Vision)
+		{
+
+			pView->SendMessage(WM_VISION_INIT,NULL,NULL);
+
+			if(!_NVision.m_structVision_Status.m_bComm_Ok)
+			{
+
+				pView->SendMessage(WM_VISION_INIT,NULL,NULL);		//ehji 140926 vision retry 초기화.
+
+				if(!_NVision.m_structVision_Status.m_bComm_Ok)
+				{
+					SendMessage(WM_ERROR, 401, NULL);
+				}
+				
+			}
+//			_NVision.Engine_End();
+//			_NVision.Engine_Start();
+//			if(_NVision.Init_N_Vision()) _NVision.m_structVision_Status.m_bComm_Ok = TRUE;
+//			else
+//			{
+//				SendMessage(WM_ERROR, 401, NULL);
+//				_NVision.m_structVision_Status.m_bComm_Ok = FALSE;
+//			}
+			pDoc->Read_Vision_Y_Offset(); //CELL FOR VISION 전 Y OFFSET READ
+			pDoc->Read_Vision_X_Offset();	//ehji 141025
+
+			pDoc->Make_Cell_for_Vision();
+			pDoc->Make_Recipe_for_Vision();
+		}
+		pDoc->nTempMainCount = 0;
+		
+		ThreadStage.Recipe_Change = TRUE;
+
+		//2015.04.29 by tskim 원재료 전산화Add Pair Interlock
+		pView->SendMessage(WM_CIM_REPORT_WORK,10,NULL);	
+
+		g_SuppyDropReport = FALSE;		//ehji 150513
+	}
+	else
+		AfxMessageBox("선택된 Recipe Name이 없습니다.");
+
+	//by shin//2009.08.25//MC 관련 TAS 추가...//
+	//Recipe Load
+	pView->WriteTasMCData(TAS_MC, 3, BIT_OFF); 
+
+//2014.11.27 by tskim 1stMeasure Skip
+	if(pDoc->m_structAdjustCondition.m_n1stMeas <= 0)
+		g_nInitMeasureGlassCount = pDoc->m_structAdjustCondition.m_n2ndMeas;//2014.05.26 by tskim
+	else
+		g_nInitMeasureGlassCount = pDoc->m_structAdjustCondition.m_n1stMeas;
+}
+
+
+
+void CRecipe::MakeListView()
+{
+	CRect rect;
+	m_ctrlRecipeList.GetClientRect(rect);
+
+	//리스트뷰 헤더 칼럼을 만든다
+	LV_COLUMN lvColumn;
+	char *listcolumn="Recipe Name";
+	int width  = rect.right;
+
+	lvColumn.mask = LVCF_FMT | LVCF_WIDTH | LVCF_TEXT | LVCF_SUBITEM;
+
+	lvColumn.fmt = LVCFMT_LEFT;		
+	lvColumn.cx = width;	
+	lvColumn.iSubItem = 0;
+	lvColumn.pszText = listcolumn;
+	m_ctrlRecipeList.InsertColumn(0, &lvColumn);
+	m_ctrlRecipeList.SetExtendedStyle(LVS_EX_FULLROWSELECT);
+}
+
+// recipe data를 list control에 설정
+int CRecipe::SetListData()
+{
+	CMainFrame *pFrame = (CMainFrame *)::AfxGetMainWnd();
+	CP8CA_LcDispDoc *pDoc = (CP8CA_LcDispDoc *)pFrame->GetActiveDocument();
+	CString str;
+	CString strCurrentRecipe;
+	int nCurrentSel;
+
+	m_ctrlRecipeList.DeleteAllItems();
+	nCurrentSel = -1;
+
+	CString strRecipeName;
+	RECIPE_DATA rd;
+
+	int c = 0 ;
+
+	for(int i = 0; i < pDoc->m_arRecipeData.GetSize(); i++)
+	{
+		rd = pDoc->m_arRecipeData.GetAt(i);
+		strRecipeName.Format("%s|%s", rd.strFrontRecipeName, rd.strBackRecipeName);
+		c++;
+
+		// 현재 설정 되어 있는 recipe의 인덱스를 찾아낸다 ////////////////
+		strCurrentRecipe.Format("%s|%s", pDoc->m_structOperatorModeRecipeData.strFrontRecipeName, pDoc->m_structOperatorModeRecipeData.strBackRecipeName);
+
+		if(strCurrentRecipe == strRecipeName) nCurrentSel = c;
+		///////////////////////////////////////////////////////////////////
+
+		if(!AddItem(strRecipeName)) AfxMessageBox("Recipe Data 설정 실패!");
+	}
+	
+	// 어떤 종류이던 recipe가 하나도 없으면 No Recipe라고 리스트 박스에 출력
+	if(c == 0) 	AddItem("No Recipe");
+
+	// 찾아낸 인덱스를 선택시켜 놓는다
+	if(nCurrentSel != -1)
+		m_ctrlRecipeList.SetItemState( nCurrentSel-1, LVIS_FOCUSED|LVIS_SELECTED, LVIS_FOCUSED|LVIS_SELECTED);
+	return 1;
+}
+
+
+BOOL CRecipe::AddItem(CString strRecipeName)
+{
+	// 리스트 컨트롤에 항목을 추가하기 위해 LV_ITEM 구조체 설정 
+	LV_ITEM lvi;
+	// Recipe Name 
+	lvi.mask = LVIF_TEXT;
+	lvi.iItem = m_ctrlRecipeList.GetItemCount();
+	lvi.iSubItem = 0;
+	lvi.pszText = (char *)(LPCSTR)strRecipeName;
+	m_ctrlRecipeList.InsertItem(&lvi);
+
+	return TRUE;
+}
+
+// RecipeName 설정
+void CRecipe::SubDisplayRecipeName()
+{
+	CString str;
+	CMainFrame *pFrame = (CMainFrame *)AfxGetMainWnd();
+	CP8CA_LcDispDoc *pDoc = (CP8CA_LcDispDoc *)pFrame->GetActiveDocument();
+
+	// Recipe Name 설정
+	str.Format("%s|%s", pDoc->m_structOperatorModeRecipeData.strFrontRecipeName, pDoc->m_structOperatorModeRecipeData.strBackRecipeName);
+
+	m_ctrlRecipeName.SetCaption(str);
+}
+
+void CRecipe::Read_ModuleData(CString strRecipeNo)		//ehji 141207
+{
+	CMainFrame *pFrame = (CMainFrame *)AfxGetMainWnd();
+	CP8CA_LcDispView* pView = (CP8CA_LcDispView*)pFrame->GetActiveView();
+	CP8CA_LcDispDoc *pDoc = (CP8CA_LcDispDoc *)pFrame->GetActiveDocument();
+
+	CModuleInfo *m_pModuleInfo;		//ehji 141207
+	
+
+	ifstream fi;
+	char ch[256] = {0,0,0,0,};	
+	CString NowModuleID[MAX_NOZZLE];
+	int nModuleID = 0;
+	CString strTempLog;
+
+	int i = 0;
+
+	CString strDataPath ;
+
+	strDataPath.Format("D:\\TOP\\P8CA_LC\\N_MODULE_DB\\%s.dat", strRecipeNo);
+
+	// 화일 열기
+	fi.open((char *)(LPCSTR)strDataPath, ios::nocreate/*in*/);
+	
+	// 화일 읽기
+	if(!fi.is_open())
+	{
+		fi.close();
+		return;
+	}
+
+	else
+	{
+		for(i = 0; i<MAX_NOZZLE; i++)
+		{
+			fi >> ch;
+			NowModuleID[i].Format("%s", ch);
+		}
+	}
+
+	fi.close();
+
+	Sleep(300);
+	pView->pN_Func->Read_Module_DB(pDoc->m_structOperatorModeRecipeData.strFrontRecipeName);
+
+	for(i = 0; i < MAX_NOZZLE; i++ )		//ehji 141207
+	{
+		if(pDoc->m_bIsHeadSelected[i])		 
+		{
+			nModuleID = atoi(NowModuleID[i]);
+			
+			pView->pN_Func->m_structNParam[i].m_strModuleID = 
+				pView->pN_Func->m_structModuleData_Set[nModuleID-1].strModuleID; 
+			pView->pN_Func->m_structNParam[i].m_nNAmplitude_Offset = 
+				pView->pN_Func->m_structModuleData_Set[nModuleID-1].nAmplitude_Offset; 
+			pView->pN_Func->m_structNParam[i].m_dNDuty_Offset = 
+				pView->pN_Func->m_structModuleData_Set[nModuleID-1].nDuty_Offset; 
+			pView->pN_Func->m_structNParam[i].m_nNNegOffset_Offset = 
+				pView->pN_Func->m_structModuleData_Set[nModuleID-1].nNegOffset_Offset; 
+			pView->pN_Func->m_structNParam[i].m_nNFirstVoltage_Offset = 
+				pView->pN_Func->m_structModuleData_Set[nModuleID-1].nFirst_Vol_Offset;
+		}
+	}					
+	
+	
+	for(int nPatternCount = 0; nPatternCount < pDoc->m_structDataEditor.m_nPatternNum; nPatternCount++)		//ehji 141207
+	{
+		for(i = 0; i < MAX_NOZZLE; i++ )
+		{
+			if(pDoc->m_bIsHeadSelected[i])
+			{
+				pView->pN_Func->m_structNParam[i].m_nNAmplitude[nPatternCount] = pDoc->m_structPatternData[nPatternCount].m_nNAmplitude[i] 
+																+ pView->pN_Func->m_structNParam[i].m_nNAmplitude_Offset; 
+			
+				pView->pN_Func->m_structNParam[i].m_dNDuty[nPatternCount] = pDoc->m_structPatternData[nPatternCount].m_dNDuty[i]
+																+ pView->pN_Func->m_structNParam[i].m_dNDuty_Offset; 
+
+				pView->pN_Func->m_structNParam[i].m_nNNegOffset[nPatternCount] = pDoc->m_structPatternData[nPatternCount].m_nNNegOffset[i]
+																+ pView->pN_Func->m_structNParam[i].m_nNNegOffset_Offset; 
+
+				pView->pN_Func->m_structNParam[i].m_nNFirstVoltage[nPatternCount] = pDoc->m_structPatternData[nPatternCount].m_nNFirstVoltage[i]
+																+ pView->pN_Func->m_structNParam[i].m_nNFirstVoltage_Offset;
+
+				strTempLog.Empty();
+				strTempLog.Format("PATTERN #%d , HEAD #%d , MODULE ID %s : AMP ( %d / %d / %d ) , DUTY ( %f / %f / %f ) , NEG_OFFSET( %d / %d / %d ) , FIRST_VOL( %d / %d / %d )"
+					, nPatternCount+1 , i+1 , pView->pN_Func->m_structNParam[i].m_strModuleID
+					, pDoc->m_structPatternData[nPatternCount].m_nNAmplitude[i] , pView->pN_Func->m_structNParam[i].m_nNAmplitude_Offset , pView->pN_Func->m_structNParam[i].m_nNAmplitude[nPatternCount] 
+					, pDoc->m_structPatternData[nPatternCount].m_dNDuty[i]      , pView->pN_Func->m_structNParam[i].m_dNDuty_Offset      , pView->pN_Func->m_structNParam[i].m_dNDuty[nPatternCount]
+					, pDoc->m_structPatternData[nPatternCount].m_nNNegOffset[i] , pView->pN_Func->m_structNParam[i].m_nNNegOffset_Offset , pView->pN_Func->m_structNParam[i].m_nNNegOffset[nPatternCount]
+					, pDoc->m_structPatternData[nPatternCount].m_nNFirstVoltage[i] , pView->pN_Func->m_structNParam[i].m_nNFirstVoltage_Offset , pView->pN_Func->m_structNParam[i].m_nNFirstVoltage[nPatternCount]);
+
+				pView->pN_Func->Save_N_Log(0,strTempLog); 
+
+			}
+		}
+	}
+}

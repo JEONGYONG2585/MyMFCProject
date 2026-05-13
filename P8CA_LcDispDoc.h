@@ -1,0 +1,475 @@
+// P8CA_LcDispDoc.h : interface of the CP8CA_LcDispDoc class
+//
+/////////////////////////////////////////////////////////////////////////////
+
+#if !defined(AFX_P8CA_LcDispDOC_H__25AA37B1_07E0_4474_B778_5CB99F6A75C9__INCLUDED_)
+#define AFX_P8CA_LcDispDOC_H__25AA37B1_07E0_4474_B778_5CB99F6A75C9__INCLUDED_
+
+#if _MSC_VER > 1000
+#pragma once
+#endif // _MSC_VER > 1000
+
+//***Data Editor 선언부 LOADING
+#include <afxtempl.h>
+#include "LcDef.h" // Data설정에 관련된 struct
+#include "LcDef_Add.h" // teaching & Io 관련 str struct..
+
+class CP8CA_LcDispDoc : public CDocument
+{
+protected: // create from serialization only
+	CP8CA_LcDispDoc();
+	DECLARE_DYNCREATE(CP8CA_LcDispDoc)
+
+// Attributes
+public:
+	int m_nMMGLineDropCount; //121105 MMG LINEDROP COUNT
+	int m_nMMGLineDropCount_Main; 
+	int m_nMMGAllLineDropCount; 
+
+	//0-999까지 등록된 Recipe를 보고하기 위해..
+	BOOL m_bRecipeExist[MAX_RECIPE];
+
+
+	//2007.06.06 By tskim
+//변환 된 Add/Del값을 Display한다..
+//	int m_nConversonAddDel[88];
+	int m_nConversonAddDel[MAX_PANEL];
+//변환 값 적용된 유효 drop수 계산을 위해 추가...
+	int m_nValidDropPoint_Conv[MAX_PATTERN][MAX_NOZZLE];   
+
+	//by shin//2009.08.26// RMS C00값 보고를 위한 Data Back-Up
+	int m_nRmsValidDropPoint[MAX_PATTERN][MAX_NOZZLE];   
+
+	// 모든 변수의 기준은 doc에서 보관
+	// 각 창들은 doc의 변수를 기준으로 각 창의 변수값 설정
+
+	// sequence 설정 변수(4가지), "Sequence.dat"
+	int m_nSeq[4][MAX_PATTERN];  
+
+	// Drop Data의 ADD와 DEL 데이타
+	long m_nAdd[4];   // JHC_Q : 실제 사용하고 있는지..
+	long m_nDel[4]; 
+
+	// 유효DropPoint 수를 관리 변수. 각 노즐별로 갖는 Dotting 수.  "ValidDropPoint.dat"
+	int m_nValidDropPoint[MAX_PATTERN][MAX_NOZZLE];   
+	int m_nValidDropPoint_Rms[MAX_PATTERN][MAX_NOZZLE];//2010.05.17 by tskim
+
+//	int m_nValidDrop_compare[88][2];
+	int m_nValidDrop_compare[MAX_PANEL][2];
+
+	// Drop Count를 저장할 변수
+	int m_nDropCount[MAX_PATTERN][MAX_NOZZLE];   
+	int m_nTotalCount[MAX_PATTERN][MAX_NOZZLE];
+    int m_nFlexibleDropCount[MAX_NOZZLE];
+	int HeadTemp[MAX_NOZZLE];
+	int m_nFlexiblePatNo;
+
+	// 유효DropPoint 수를 관리 변수,,JHC_Q : 현재 사용하지 않는 변수
+	double m_dLevel2Volume[9];  
+	
+	// Pattern Data에 있는 변수들(전부 구조체로 통합)
+	PATTERN_DATA m_structPatternData[MAX_PATTERN];
+//	PATTERN_DATA m_structPatternData_Rms[MAX_PATTERN];//2010.05.17 by tskim
+	
+	// Adjust Condition에 있는 변수들
+	ADJUST_CONDITION m_structAdjustCondition;
+	ADJUST_CONDITION m_structAdjustCondition_Rms;//2010.05.17 by tskim
+	
+	// Data Editor에 있는 변수들
+	DATA_EDITOR m_structDataEditor;
+	DATA_EDITOR m_structDataEditor_Rms;//2010.05.17 by tskim
+
+	// Recipe Data전체를 관리하는 변수
+	CArray<RECIPE_DATA, RECIPE_DATA&> m_arRecipeData;
+	CArray<RECIPE_DATA, RECIPE_DATA&> m_arRecipeData_Rms;//2010.05.17 by tskim
+
+	// Drop Data에만 있는 변수들(패턴 갯수 만큼 있음)
+	//CArray<DROP_DATA, DROP_DATA> m_arDropData[MAX_PATTERN];
+	CArray<DROP_DATA, DROP_DATA> *m_arDropData;
+//2010.06.21 by tskim Repair
+	CArray<DROP_DATA, DROP_DATA> *m_arDropDataBk;
+	CArray<DROP_DATA, DROP_DATA> *m_arDropData_Rms;//2010.05.17 by tskim
+
+//2009.12.31 by tskim 양방향 Drop 관련 
+	CArray<DROP_DATA, DROP_DATA> *m_arDropData_R;
+	CArray<DROP_DATA, DROP_DATA> *m_arDropData_R_Rms;//2010.05.17 by tskim
+
+	CArray<LINE_DATA, LINE_DATA> *m_arLineData;
+	CArray<LINE_DATA, LINE_DATA> *m_arLineDataBk;
+	CArray<LINE_DATA, LINE_DATA> *m_arLineDataPat;
+	CArray<LINE_DATA, LINE_DATA> *m_arLineData_R;
+	CArray<LINE_DATA, LINE_DATA> *m_arLineData_Rms;
+	CArray<LINE_DATA, LINE_DATA> *m_arLineDataBk_Rms;
+	CArray<LINE_DATA, LINE_DATA> *m_arLineDataPat_Rms;
+	CArray<LINE_DATA, LINE_DATA> *m_arLineData_R_Rms;
+
+	//MMG LINEDATA 변수 121210
+	CArray<LINE_DATA, LINE_DATA> *m_arMMGLineData;
+	CArray<LINE_DATA, LINE_DATA> *m_arMainLineData;
+	CArray<LINE_DATA, LINE_DATA> *m_arMMGLineDataBk;
+	CArray<LINE_DATA, LINE_DATA> *m_arMainLineDataBk;
+	CArray<LINE_DATA, LINE_DATA> *m_arMMGLineDataTemp;
+	CArray<LINE_DATA, LINE_DATA> *m_arMainLineDataTemp;
+	CArray<LINE_DATA, LINE_DATA> *m_arMMGLineData_R;
+	CArray<LINE_DATA, LINE_DATA> *m_arMainLineData_R;
+	CArray<LINE_DATA, LINE_DATA> *m_arMainMMGYLineData;
+	CArray<LINE_DATA, LINE_DATA> *m_arMainMMGYLineData_R;
+	///////////////////////////
+
+	//121210 추가 사항 
+	CArray<LINE_DATA, LINE_DATA> *m_arMMGLineDataPat;
+	CArray<LINE_DATA, LINE_DATA> *m_arMainLineDataPat;
+	CArray<LINE_DATA, LINE_DATA> *m_arMainMMGYLineDataPat;
+	//////////////////////////
+
+
+
+	// 프로그램 설치시 등록되는 데이타의 경로
+	CString m_strDataPath;
+
+	// Glass Identity를 저장하기위한 변수..// 60개를 만듬..
+//	CString m_strGlassIden[100];
+	CString m_strGlassIden[MAX_PANEL];
+	
+	// 개별head에 설정되어있는 axis구성..// 12
+	HEAD_CONFIG m_structHeadConfig[MAX_NOZZLE];
+	// volumn calibration data & coefficient //12
+	CALIBRATIONDATA m_structCalibData[MAX_NOZZLE];
+
+	// Blob 관련 변수들 
+	BLOBPARAMETER Blob_Parameter;
+
+	// RMS 보고를 위한 변수 추가//2009.08.26//
+	double m_dRmsTargetWeight; //Target Weight
+	CString m_strRmsLcType; //LC Type
+	long m_nRmsPointNumberX; //X_Point No. 
+	long m_nRmsPointNumberY;  //Y_Point No.
+	double m_dRmsWidthX; //X_Width
+	double m_dRmsWidthY; //Y_Width
+	int m_nRmsCenterDotting; //C00
+
+//2010.09.19 by tskim Rms Add
+	double m_dRmsGlassSizeX;		// glass size X
+	double m_dRmsGlassSizeY;		// glass size Y
+	double m_dRmsHomeX;			// home의 x
+	double m_dRmsHomeY;			// home의 y
+	double m_dRmsThickness;		// glass 두께
+	long m_nRmsPatternNum;			// 패턴 갯수
+	BOOL m_nRmsSpecialInfo;
+	BOOL m_nRmsSafetyLock;
+	BOOL m_nRmsGlassCheck;	
+	BOOL m_nRmsRecipeNumCompare;
+	BOOL m_nRmsPatternDispensing;
+	BOOL m_nRmsNgDropping;
+	int m_nRmsLcSupplyType;
+	int m_nRmsDummyType;
+	float m_nRmsCanisterEmgWeight; //090702 Canister경고량 
+    int m_nRmsLiquidSupplyLimit; //090702 액정공급Limit  
+	BOOL m_nRmsAdjustInAuto;	// auto 구동중에 adjust
+	BOOL m_nRmsDummyDropBeforeMeasInAuto;	// auto 구동 중에 측정전 Dummy Drop
+	int m_nRmsTableSpeed;
+	int m_nRmsSAxisSpeed;
+	int m_dRmsDropOffset;
+	int m_dRmsDischargeSpeed;
+	int m_dRmsSuctionSpeed;
+	int m_dRmsAccTime;
+	int m_dRmsDecTime;
+	int m_dRmsStartSpeed;
+	double m_dRmsNozzleOffset[MAX_NOZZLE];
+	double m_dRmsCenterPositionX[5];
+	double m_dRmsCenterPositionY[5];
+	int m_nRmsSuctionLineNo;
+	long m_nRmsSequence;
+//2014.11.27 by tskim RMS Add 
+	double m_Rms_dMarginRate;
+	double m_Rms_dCalibrationInterlock; 
+	BOOL m_Rms_bMMGLineDropMode;
+	long m_Rms_nCheckDegasSheet;
+	VISION_DATA m_Rms_structVision;
+	BOOL m_Rms_bUse_Vision; 
+	PATTERN_DATA m_Rms_structPatternData[MAX_PATTERN_FOR_RMS];
+
+
+//2010.09.28 by tskim RMS Level3Read용 
+	// RMS 보고를 위한 변수 추가//2009.08.26//
+	double m_dRmsTargetWeight_R; //Target Weight
+	CString m_strRmsLcType_R; //LC Type
+	long m_nRmsPointNumberX_R; //X_Point No. 
+	long m_nRmsPointNumberY_R;  //Y_Point No.
+	double m_dRmsWidthX_R; //X_Width
+	double m_dRmsWidthY_R; //Y_Width
+	int m_nRmsCenterDotting_R; //C00
+//2010.09.19 by tskim Rms Add
+	double m_dRmsGlassSizeX_R;		// glass size X
+	double m_dRmsGlassSizeY_R;		// glass size Y
+	double m_dRmsHomeX_R;			// home의 x
+	double m_dRmsHomeY_R;			// home의 y
+	double m_dRmsThickness_R;		// glass 두께
+	long m_nRmsPatternNum_R;			// 패턴 갯수
+	BOOL m_nRmsSpecialInfo_R;
+	BOOL m_nRmsSafetyLock_R;
+	BOOL m_nRmsGlassCheck_R;	
+	BOOL m_nRmsRecipeNumCompare_R;
+	BOOL m_nRmsPatternDispensing_R;
+	BOOL m_nRmsNgDropping_R;
+	int m_nRmsLcSupplyType_R;
+	int m_nRmsDummyType_R;
+	float m_nRmsCanisterEmgWeight_R; //090702 Canister경고량 
+    int m_nRmsLiquidSupplyLimit_R; //090702 액정공급Limit  
+	BOOL m_nRmsAdjustInAuto_R;	// auto 구동중에 adjust
+	BOOL m_nRmsDummyDropBeforeMeasInAuto_R;	// auto 구동 중에 측정전 Dummy Drop
+	int m_nRmsTableSpeed_R;
+	int m_nRmsSAxisSpeed_R;
+	int m_dRmsDropOffset_R;
+	int m_dRmsDischargeSpeed_R;
+	int m_dRmsSuctionSpeed_R;
+	int m_dRmsAccTime_R;
+	int m_dRmsDecTime_R;
+	int m_dRmsStartSpeed_R;
+	double m_dRmsNozzleOffset_R[MAX_NOZZLE];
+	double m_dRmsCenterPositionX_R[5];
+	double m_dRmsCenterPositionY_R[5];
+	int m_nRmsSuctionLineNo_R;
+	long m_nRmsSequence_R;
+
+	int nRms_Center_Dotting[MAX_PANEL];   //back-up	
+//2015.03.15 by ehji RMS Add
+	BOOL m_bRMS_LCQuanReportPlus;
+	BOOL m_bRMS_LCQuanReportMinus;
+	BOOL m_bRMS_AddDelChange;
+	BOOL m_bRMS_AddDelCompare;
+	BOOL m_bRMS_SelectDropMode;
+	BOOL m_bRMS_InteractiveDrop;
+	BOOL m_nRMS_GroupLineDrop;
+	int m_nRMS_CalibraionMode;
+	int m_nRMS_NzlMode;
+
+// Operations
+public:
+	BOOL m_bDropDetectRealTimeMode; 
+	int	m_dDropCountErrorRange_temp[2][MAX_NOZZLE];	//0 : 상한, 1:하한
+	double	m_dDropCountErrorRange_per[2][MAX_NOZZLE];	//0 : 상한, 1:하한
+	int m_nSelFile;
+	double m_dTeachData[40][3];   // "Hello!" ..크게 바뀌지 않을 것 같다.
+	double m_dCounter[5][2];
+	double m_dOffset[2][MAX_NOZZLE];  
+	double m_dCommon[2][MAX_BAL];
+	double m_dDummyCupWeight[2][MAX_NOZZLE];
+	CString m_strPumpNo[MAX_NOZZLE];  
+	CString m_strLCLotNo[MAX_NOZZLE];  
+//	unsigned long m_strLCLotNo[MAX_NOZZLE];  
+	double	m_dLCAmountDiff[2];//2010.06.07 by tskim
+	BOOL	m_bLowDetectSensorUSE[MAX_NOZZLE];//2010.06.07 by tskim
+	BOOL	m_bDropCountSensorUSE[MAX_NOZZLE];
+	BOOL    m_bRemainSensorUSE[MAX_NOZZLE];//잔량감지센서사용유무 yamary..
+	int	m_dDropCountErrorRange[2][MAX_NOZZLE];	//0 : 상한, 1:하한
+	int	m_dSetLCDetectedCount;	// 잔량 Sensor에 감지되고도 작업 가능한 수를 설정	
+//
+	float	m_dMeasuredData[MAX_NOZZLE][MAX_MEASURED_DATA]; // 측정data를 관리하기위한변수..// adjust에 있는것을 document로..
+	BOOL	m_bIsCompleted[MAX_NOZZLE];	// measuring에서 head측정완료 유무 관리변수
+	BOOL	m_bIsHeadSelected[MAX_NOZZLE];
+	BOOL 	m_bIonizerAlwaysON;			// 이오나이져 항시 ON 모드
+	BOOL    m_bAutoManualFlag;          //090612 Auto 및 Manual 상태 확인 위한 변수 추가 by shlee
+
+	double m_dCanister[2][4];
+	int m_nCanisterBalNo[2];
+	double m_dMotorMoveDistance[2][2];
+	double m_dCanisterSupplyWeignt[4];
+	double m_dDummyTeachData[MAX_NOZZLE];   
+	double m_dDummyTeachData2[MAX_NOZZLE];   
+
+	int m_nInitSupplyTime;
+	int m_nNormalSupplyTime;
+	double m_dManuCanAlarmWeight;
+	int m_nCount; //090711 ErrorInformation Data 개수 참조 변수 
+
+	double m_Cunsumption_Data[7];	//20160227 Consumption YSM
+
+// Overrides
+	// ClassWizard generated virtual function overrides
+	//{{AFX_VIRTUAL(CP8CA_LcDispDoc)
+	public:
+	virtual BOOL OnNewDocument();
+	virtual void Serialize(CArchive& ar);
+	virtual BOOL CanCloseFrame(CFrameWnd* pFrame);
+	//}}AFX_VIRTUAL
+
+// Implementation
+public:
+	// variable
+	BOOL m_bIsEngineerMode;
+	BOOL m_bInterlockMode;
+	BOOL m_bMaintMode;
+	RECIPE_DATA m_structOperatorModeRecipeData;	// 현재 작업중인 operatorMode의 recipe name 보관(folder명만 보관)
+	RECIPE_DATA m_structOperatorModeRecipeData_Rms;	// 현재 작업중인 operatorMode의 recipe name 보관(folder명만 보관)
+	COLORREF m_colorNozzle[MAX_NOZZLE];
+
+	// function 
+	void Match_Worked_Report_for_Level();
+	void Match_Worked_Report_for_ValidDropPoint(int nPattern_num,BOOL bDropEnable[MAX_PATTERN][MAX_NOZZLE]);
+	void SetValidDropPoint(int);
+	void GetDropCount(int nP);
+	void ReadDropDataFile(long nP);
+	void SaveLastRecipe();	// 마지막으로 작업한 recipename을 화일로 저장
+	void SaveMeasVariable(); // 마지막으로 측정한 검사 번호, Glass 반출후 Panel 판정값 보고 되지 않은 수 저장
+	void SaveLevel2Volume();
+	void SaveVolCalibData();
+	void SaveMeasuredData();	// measured data를 저장..
+	void SaveAdjustingCondition();	// adjusting condition의 변경 내용을 저장..
+	void SaveActualPos();
+//
+	BOOL FindRecipeData();
+	BOOL ReadRecipeFolder(CString strPath);
+	BOOL ReadRecipeFile(CString strRecipeName);
+	BOOL ReadCalSetFile(CString strRecipeName);
+	BOOL ReadMeasuredData();
+	BOOL ReadActualPos();
+//	BOOL SaveBarcodeData();
+//	BOOL ReadBarcodeData();
+
+public:
+	double m_dOffset_Prev[2][MAX_NOZZLE];//2015.04.29 원재료 전산화Add LC잔량. 직전LC잔량 Back-Up
+	BOOL Save_DummyDropStatus();
+	BOOL Read_DummyDropStatus();
+	int m_nRFDataDummyDrop[MAX_NOZZLE];//미실시 : 0 , 실시 : 1
+	BOOL Read_LCRemain();
+	BOOL Save_LCRemain();
+	long m_lDropCount[MAX_NOZZLE];
+	BOOL Save_Action_Offset();
+	BOOL Read_Action_Offset();
+	MOTORLOAD m_structMotorload;
+	void Read_MotorLoad();
+	NVISION_PARAM m_structN_Vision; //WINGS_VISION ADD
+	int Read_FlexibleData_First();
+	int Save_FlexibleData_First();
+	int Read_Section1stCalibrationData();
+	int Save_Section1stCalibrationData();
+	int Read_SectionCalibrationData();
+	int Save_SectionCalibrationData();
+	CString m_strLC_Consumption[6][MAX_NOZZLE];//0:Dummy, 1: Supply, 2: Degae, 3,4,5:Spare
+	void Save_LC_Consumption();
+	void Read_LC_Consumption();
+	double m_dLC_Consumption[6][MAX_NOZZLE];//0:Dummy, 1: Supply, 2: Degae, 3,4,5:Spare
+	int m_nMMGpatStatus[MAX_NOZZLE]; // 141015 BY SHLEE // 0: BLANC , 1 : MAIN , 2 : MMG
+	BOOL Save_Vision_X_Offset();
+	BOOL Save_Vision_Y_Line_Offset();
+	BOOL Read_Vision_Y_Line_Offset();
+	BOOL Read_Vision_X_Offset();
+	BOOL ReadDropStatus();
+	BOOL SaveDropStatus();
+	void Read_Vision_PanelDropRange();
+	void Save_Vision_PanelDropRange();
+	CString m_strRFDataBarcodeID[MAX_NOZZLE];
+	CString m_strRFDataHeadName[MAX_NOZZLE];
+	CString m_strRFDataBalanceNo[MAX_NOZZLE];
+	CString m_strRFDataResidualData[MAX_NOZZLE];
+	CString m_strRFDataLOTID[MAX_NOZZLE];
+	CString m_strRFDataLOTID_Full[MAX_NOZZLE];
+	float m_dMeasuredData_Total[MAX_NOZZLE][MAX_MEASURED_DATA];
+	double DataFiltering(char ch[256]);
+	int nTempMainCount;
+	int m_nDropcount;
+	int m_nMainDropCount;
+	int m_nMMGDropcount;
+	void SaveNozzleCleanerData();
+	void ReadMuitiTarget();
+	float m_dMeasuredData_Target[MAX_NOZZLE][MAX_MEASURED_DATA];
+	BOOL Make_Recipe_for_Vision();
+	BOOL Save_Vision_Y_Offset();
+	BOOL Read_Vision_Y_Offset();
+	BOOL Make_Cell_for_Vision();
+	double m_dVision_Y_Offset[MAX_NOZZLE];		// Y All Shift Offset
+	double m_dVision_X_Offset[MAX_NOZZLE];		// X Shift Offset
+	double m_dVision_Y_Line_Offset[MAX_NOZZLE]; // Y Line Shift Offset
+	void ReadFlexVolCalibData();
+	void ReadVolCalibData();
+	double m_diffTargetFlexBK[MAX_NOZZLE][MAX_PATTERN];
+	void SaveMultiTarget();
+	void SaveFlexibleData();
+	void ReadNozzleCleanerData();
+	void Save_Vision_Param();
+	void Read_Vision_Param();
+	VISION_DATA m_structVision;
+	MACHINE_INFO m_structMachineInfo;
+	void SetValidDropPoint_temp(int nP);
+	CString m_strRmsRecipeNO;
+	BOOL ReadTeachRmsData();
+	BOOL SaveRmsTeachData();
+	EC_INFORM m_structEc_R;
+	BOOL SaveRmsData(CString strRecipeName);
+	int m_nRecipeEditCode;
+	BOOL m_bPumpChanged;
+	BOOL m_bRecipeChanged;
+	int m_nSite;//P8E,P8E+ 구분 
+	float m_dMeasuredData_First[MAX_NOZZLE][MAX_MEASURED_DATA];
+	BOOL m_bTeachDataSave;
+	int m_nRecipecount;
+	EC_INFORM m_structEc;
+	CString m_strLCLotNo_Canister[2];
+	double m_dAlignYTrace[100];
+	double m_dAlignXTrace[100];
+	void SaveMarkAlignResult();
+	BOOL ReadMarkAlignResult();
+	CString m_strLineNo;
+	CString m_strMachineNo;
+	void ReadLineDropData();
+	void DropDataSet();
+	BOOL ReadRecipRms(CString strRecipeName);
+	void Match_Worked_Report_for_ValidDropPoint2(int nPattern_num,BOOL bDropEnable[MAX_PATTERN][MAX_NOZZLE]);
+	void Read_AutoErrListInformData();
+	BOOL ReadSupplyTimeData();
+	BOOL SaveSupplyTimeData();
+	BOOL ReadCanisterTypeData();
+	BOOL SaveCanisterData();
+	BOOL SaveDummyData();
+	BOOL ReadDummyData();
+	BOOL ReadSupplyWeight();
+	BOOL SaveSupplyWeight();
+	BOOL ReadMotorMoveDistance();
+	BOOL SaveMotorMoveDistance();
+	BOOL ReadAccuracyMotorPos();
+	BOOL SaveAccuracyMotorPos();
+	BOOL SaveSPDData();
+	BOOL ReadSPDData();
+	BOOL FolderCopy(CString strFrom, CString strTo);
+	BOOL ReadBarcodeData();	
+	BOOL SaveBarcodeData();
+	BOOL m_bMovingSpecCount;
+	void Read_SpecoutCount();
+	void Save_SpecoutCount();
+	CString m_strSpecTime;
+	int m_nSpecCount[MAX_NOZZLE];
+	int m_nRealSpecCount[MAX_NOZZLE];
+	int m_nSpecTime;
+	BOOL m_bPassWordOK;
+	int StrtoValuePanelInform(CString strPanelInform, int PanelType);
+	int StrtoValue(CString str);
+	CString LevelTostr(int Level);
+	double m_dAccuracyPosX[MAX_NOZZLE];
+	double m_dAccuracyPosY[MAX_NOZZLE];
+	int m_nLineDropCount;
+	virtual ~CP8CA_LcDispDoc();
+#ifdef _DEBUG
+	virtual void AssertValid() const;
+	virtual void Dump(CDumpContext& dc) const;
+#endif
+
+	void CP8CA_LcDispDoc::Save_LC_Consumption(int dfiledir, double val); //20160227 Consumption YSM
+
+protected:
+
+// Generated message map functions
+protected:
+	//{{AFX_MSG(CP8CA_LcDispDoc)
+		// NOTE - the ClassWizard will add and remove member functions here.
+		//    DO NOT EDIT what you see in these blocks of generated code !
+	//}}AFX_MSG
+	DECLARE_MESSAGE_MAP()
+};
+
+/////////////////////////////////////////////////////////////////////////////
+
+//{{AFX_INSERT_LOCATION}}
+// Microsoft Visual C++ will insert additional declarations immediately before the previous line.
+
+#endif // !defined(AFX_P8CA_LcDispDOC_H__25AA37B1_07E0_4474_B778_5CB99F6A75C9__INCLUDED_)

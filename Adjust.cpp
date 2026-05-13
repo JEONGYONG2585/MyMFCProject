@@ -1,0 +1,3899 @@
+ // Adjust.cpp : implementation file
+//
+
+#include "stdafx.h"
+#include "P8CA_LcDisp.h"
+
+#include "MainFrm.h"
+#include "P8CA_LcDispView.h"
+
+#include "Adjust.h"
+#include "AdjustInitial.h"
+#include "AdjustDraw.h"
+#include <math.h>
+#include "Polylist.h"
+#include "NormalMsg.h"
+
+
+#include "BalModeSelect.h"
+
+#include "TempOP.h"
+#include "BalanceCalibration.h"
+#include "Target.h"
+#include "Piezostatus.h"
+
+#include "NModuleAging.h"
+
+#include "ModuleInfo.h"
+
+#ifdef _DEBUG
+#define new DEBUG_NEW
+#undef THIS_FILE
+static char THIS_FILE[] = __FILE__;
+#endif
+extern int m_nManuDummyCnt;
+extern int m_nDummyCycle;//2010.12.02 by tskim ½ÂÇö 
+extern double m_dOldAdjustAbsPos[MAX_NOZZLE];
+extern BOOL g_bCountingFlag;
+extern BOOL g_bInitilDisplay;
+extern BOOL g_ManualApdReport;
+extern double m_dAdjustError;
+extern int g_nManuMeasureLoopCount;
+extern int g_nLoopCount[MAX_NOZZLE];
+extern BOOL g_bMessageDisplay;
+
+extern BOOL m_bSWCheck;
+extern BOOL g_bRemoteControl;
+//2011.05.12 by tskim
+extern BOOL g_bMultiTargetMeas;
+//extern int g_nMultiTarget[MAX_NOZZLE];
+extern BOOL g_bInitialShot;
+
+extern BOOL g_bCalibrationApply;
+extern int g_nMeasureDisplayType;//0: 1Drop 1: Total Drop
+
+extern BOOL g_bAceeptSettingStatus; //141113 GLOBAL º¯¼ö ¼±¾ð 
+
+
+extern BOOL N_Nozzle_Detect_Flag[MAX_NOZZLE];
+/////////////////////////////////////////////////////////////////////////////
+// CAdjust dialog
+
+CAdjust::CAdjust(CWnd* pParent /*=NULL*/)
+
+	: CDialog(CAdjust::IDD, pParent)
+{
+	//{{AFX_DATA_INIT(CAdjust)
+	//}}AFX_DATA_INIT
+	m_nR = 0 , m_nC = 8;
+	m_nMeasureJob = 0;
+	m_nTimerCount=0;
+	m_bRun=false;
+	m_str1="";
+	m_str2="";
+	//
+	ThBal[BALID1].JobStep = 0;
+	ThBal[BALID2].JobStep = 0;
+	ThBal[BALID3].JobStep = 0;
+	ThBal[BALID4].JobStep = 0;
+	ThBal[BALID5].JobStep = 0;
+	ThBal[BALID6].JobStep = 0;
+	ThBal[BALID7].JobStep = 0;
+	ThBal[BALID8].JobStep = 0;
+	//
+	ThBal[BALID1].nLoopCount = 0;
+	ThBal[BALID2].nLoopCount = 0;
+	ThBal[BALID3].nLoopCount = 0;
+	ThBal[BALID4].nLoopCount = 0;
+	ThBal[BALID5].nLoopCount = 0;
+	ThBal[BALID6].nLoopCount = 0;
+	ThBal[BALID7].nLoopCount = 0;
+	ThBal[BALID8].nLoopCount = 0;	
+	//
+	ThBal[BALID1].nHeadSelected = -1;
+	ThBal[BALID2].nHeadSelected = -1;
+	ThBal[BALID3].nHeadSelected = -1;
+	ThBal[BALID4].nHeadSelected = -1;
+	ThBal[BALID5].nHeadSelected = -1;
+	ThBal[BALID6].nHeadSelected = -1;
+	ThBal[BALID7].nHeadSelected = -1;
+	ThBal[BALID8].nHeadSelected = -1;
+		
+//141113 Çìµå ¼³Á¤ ÃÊ±âÈ­ ±¸¹® »èÁ¦ 
+//	for(int i=0 ; i<MAX_NOZZLE ;i++)
+//		Drop_Info.manu_head_job[i] = false;
+
+//
+	ThreadStage.AdjustInitCode='D';
+
+	m_nTasJob = 0;
+	m_bSWCheck = false;
+	m_bMeasureInterlock=FALSE;
+
+	g_bMultiTargetMeas = FALSE;
+	g_bInitialShot = TRUE;
+}
+
+CAdjust::~CAdjust()
+{
+}
+
+void CAdjust::DoDataExchange(CDataExchange* pDX)
+{
+	CDialog::DoDataExchange(pDX);
+	//{{AFX_DATA_MAP(CAdjust)
+	DDX_Control(pDX, IDC_INITIAL_VOLCALCULATE, m_ctrlVolCalculate);
+	DDX_Control(pDX, IDC_BTN_PUMP_INITIAL, m_ctrlPumpInitial);
+	DDX_Control(pDX, IDC_LABEL_RECIPE_NAME, m_ctrlRecipeName);
+	DDX_Control(pDX, IDC_LABEL_LOOP_COUNT1, m_ctrlLoopCount1);
+	DDX_Control(pDX, IDC_LABEL_LOOP_COUNT2, m_ctrlLoopCount2);
+	DDX_Control(pDX, IDC_LABEL_LOOP_COUNT3, m_ctrlLoopCount3);
+	DDX_Control(pDX, IDC_LABEL_LOOP_COUNT4, m_ctrlLoopCount4);
+	DDX_Control(pDX, IDC_LABEL_LOOP_COUNT5, m_ctrlLoopCount5);
+	DDX_Control(pDX, IDC_LABEL_LOOP_COUNT6, m_ctrlLoopCount6);
+	DDX_Control(pDX, IDC_LABEL_LOOP_COUNT7, m_ctrlLoopCount7);
+	DDX_Control(pDX, IDC_LABEL_LOOP_COUNT8, m_ctrlLoopCount8);
+	DDX_Control(pDX, IDC_LABEL_LOOP_COUNT9, m_ctrlLoopCount9);
+	DDX_Control(pDX, IDC_LABEL_LOOP_COUNT10, m_ctrlLoopCount10);
+	DDX_Control(pDX, IDC_LABEL_LOOP_COUNT11, m_ctrlLoopCount11);
+	DDX_Control(pDX, IDC_LABEL_LOOP_COUNT12, m_ctrlLoopCount12);
+	DDX_Control(pDX, IDC_CMD_DUMMY_DROP, m_ctrlDummyDrop);
+	DDX_Control(pDX, IDC_MSFLEXGRID_ADJUST, m_ctrlAdjustingCondition);
+	DDX_Control(pDX, IDC_MSFLEXGRID_ADJUST2, m_ctrlMeasuredData);
+	DDX_Control(pDX, IDC_CMD_ADJUST, m_ctrlAdjust);
+	DDX_Control(pDX, IDC_CMD_MEASURE, m_ctrlMeasure);
+	DDX_Control(pDX, IDC_LABEL_MESSAGE, m_ctrlMessage1);
+	DDX_Control(pDX, IDC_LABEL_MESSAGE2, m_ctrlMessage2);
+	DDX_Control(pDX, IDC_LABEL_MESSAGE3, m_ctrlMessage3);
+	DDX_Control(pDX, IDC_LABEL_MESSAGE4, m_ctrlMessage4);
+	DDX_Control(pDX, IDC_CMD_RETURN, m_ctrlReturn);	
+	DDX_Control(pDX, IDC_LABEL_MESSAGE_DUMMYDROP, m_ctrlMessageDummyDrop);
+	DDX_Control(pDX, IDC_MSFLEXGRID_VOLCALIB_RESULT, m_ctrlVolCalibResult1);
+	DDX_Control(pDX, IDC_MSFLEXGRID_VOLCALIB_RESULT2, m_ctrlVolCalibResult2);
+	DDX_Control(pDX, IDC_INITIAL_VOLCALIB, m_ctrlVolCalib);
+	DDX_Control(pDX, IDC_BAL_MODE_SET, m_ctrlBalModeSet);
+	DDX_Control(pDX, IDC_DUMMY_CNT, m_ctrlDummyCnt);
+	DDX_Control(pDX, IDC_LABEL_LOOP_COUNT13, m_ctrlLoopCount13);
+	DDX_Control(pDX, IDC_LABEL_LOOP_COUNT14, m_ctrlLoopCount14);
+	DDX_Control(pDX, IDC_LABEL_LOOP_COUNT15, m_ctrlLoopCount15);
+	DDX_Control(pDX, IDC_LABEL_LOOP_COUNT16, m_ctrlLoopCount16);
+	DDX_Control(pDX, IDC_LABEL_MESSAGE5, m_ctrlMessage5);
+	DDX_Control(pDX, IDC_LABEL_MESSAGE6, m_ctrlMessage6);
+	DDX_Control(pDX, IDC_CMD_DROP_COUNTING, m_ctrlDropCount);
+	DDX_Control(pDX, IDC_APD_REPORT, m_ctrlApdReport);
+	DDX_Control(pDX, IDC_ADJUST_ERROR, m_ctrlAdjustError);
+	DDX_Control(pDX, IDC_MEASURE_COUNT, m_ctrlManuMeasureCount);
+	DDX_Control(pDX, IDC_LABEL_MESSAGE7, m_ctrlMessage7);
+	DDX_Control(pDX, IDC_LABEL_MESSAGE8, m_ctrlMessage8);
+	DDX_Control(pDX, IDC_DUMMY_CYCLE, m_ctrlDummyCycle);
+	DDX_Control(pDX, IDC_TARGET_MODE, m_ctrlTargetMode);
+	DDX_Control(pDX, IDC_CMD_TITLE, m_ctrlTitle);
+	DDX_Control(pDX, IDC_TARGET_SET, m_ctrlTargetSet);
+	DDX_Control(pDX, IDC_CALIBRATION_APPLY, m_ctrlCalibApply);
+	DDX_Control(pDX, IDC_INITIAL_ONOFF, m_ctrlInitialMode);
+	DDX_Control(pDX, IDC_N_OFFSET, m_ctrlNOffset);
+	DDX_Control(pDX, IDC_MSFLEXGRID_ADJUST3, m_ctrlMeasuredData2);
+//	DDX_Control(pDX, IDC_MSFLEXGRID_VOLCALIB_RESULT3, m_ctrlVolCalibResult1);
+	//}}AFX_DATA_MAP
+}
+
+
+BEGIN_MESSAGE_MAP(CAdjust, CDialog)
+	//{{AFX_MSG_MAP(CAdjust)
+	ON_BN_CLICKED(IDC_BTN_PREV, OnBtnPrev)
+	ON_BN_CLICKED(IDC_BTN_NEXT, OnBtnNext)
+	ON_BN_CLICKED(IDC_BTN_UP, OnBtnUp)
+	ON_BN_CLICKED(IDC_BTN_DOWN, OnBtnDown)
+	ON_BN_CLICKED(IDC_BTN_PUMP_INITIAL, OnBtnPumpInitial)
+	ON_BN_CLICKED(IDC_BTN_SEQ_INITIAL, OnBtnSeqInitial)
+	ON_WM_TIMER()
+	ON_WM_PAINT()
+	ON_BN_CLICKED(IDC_INITIAL_VOLCALCULATE, OnInitialVolcalculate)
+	ON_WM_RBUTTONDBLCLK()
+	//}}AFX_MSG_MAP
+END_MESSAGE_MAP()
+
+/////////////////////////////////////////////////////////////////////////////
+// CAdjust message handlers
+
+BOOL CAdjust::OnInitDialog() 
+{
+	CDialog::OnInitDialog();
+	
+	// TODO: Add extra initialization here
+	CMainFrame* pFrame = (CMainFrame*)AfxGetMainWnd();
+	CP8CA_LcDispView* pView = (CP8CA_LcDispView*)pFrame->GetActiveView();
+	CP8CA_LcDispDoc* pDoc = (CP8CA_LcDispDoc *)pFrame->GetActiveDocument();
+
+	CString str = "", str1 = "";
+	int i = 0 , j = 0;	
+
+	g_bMessageDisplay = TRUE;
+	//
+	SubDisplayRecipeName();
+
+	SelectLanguage();
+//2014.12,01 by tskim ÁÖ¼® Ã³¸® ÀÌÀ¯ È®ÀÎ ÇÊ¿ä...ÀÖ¾î¾ßÁö ½ÍÀºµ¥ »ç°í ¹æÄ¡ Â÷¿ø¿¡¼­´Â.
+//141113 HEAD ÃÊ±âÈ­ »èÁ¦. 
+	for(i = 0; i < MAX_NOZZLE/2; i++)
+	{
+//		if(Drop_Info.manu_head_job[i+MAX_NOZZLE/2] != TRUE)
+		{
+			if(pDoc->m_bIsHeadSelected[i+MAX_NOZZLE/2]==TRUE) 
+			{
+				Drop_Info.manu_head_job[i+MAX_NOZZLE/2] = TRUE;
+			}
+			else	//150710 HSN
+			{
+				Drop_Info.manu_head_job[i+MAX_NOZZLE/2] = FALSE;				
+			}
+		}
+	}
+
+
+	for(i = 0; i < MAX_NOZZLE/2; i++)
+	{
+//		if(Drop_Info.manu_head_job[i] != TRUE)
+		{
+			if(pDoc->m_bIsHeadSelected[i]==TRUE) 
+			{
+				Drop_Info.manu_head_job[i] = TRUE;
+			}
+			else	//150710 HSN
+			{
+				Drop_Info.manu_head_job[i] = FALSE;				
+			}
+		}
+	}
+//////////////////////////////////
+
+
+//	SubDisplayAdjustingCondition(8); // head16~head9ÀÇ data
+//	SubDisplayAdjustingCondition(0); // head8~head1ÀÇ data
+
+
+	// adjust1
+	for(i = 1 ; i <= MAX_NOZZLE/2; i++)
+	{
+		str.Format("      H%d",i+(MAX_NOZZLE/2));
+		m_ctrlAdjustingCondition.SetTextMatrix(0, (MAX_NOZZLE/2+1)-i ,str);
+	}
+
+	m_ctrlAdjustingCondition.SetGridLineWidth(2);
+	if(pView->m_nLanguage == 0)
+	{
+		m_ctrlAdjustingCondition.SetTextMatrix(1, 0, "ÅäÃâÈ½¼ö");
+		m_ctrlAdjustingCondition.SetTextMatrix(2, 0, "¹Ýº¹È½¼ö");
+		m_ctrlAdjustingCondition.SetTextMatrix(3, 0, "¸ñÇ¥ÅäÃâ·®(mg)");
+		m_ctrlAdjustingCondition.SetTextMatrix(4, 0, "¸ñÇ¥¿ÀÂ÷(¡¾%)");
+	}
+	else if(pView->m_nLanguage == 1)
+	{
+		m_ctrlAdjustingCondition.SetTextMatrix(1, 0, "Charge Count");
+		m_ctrlAdjustingCondition.SetTextMatrix(2, 0, "Repeat Count");
+		m_ctrlAdjustingCondition.SetTextMatrix(3, 0, "Target Amount(mg)");
+		m_ctrlAdjustingCondition.SetTextMatrix(4, 0, "Target Error(¡¾%)");
+	}
+	else if(pView->m_nLanguage == 2)
+	{ 
+		m_ctrlAdjustingCondition.SetTextMatrix(1, 0, "÷ÎõóüÞâ¦");
+		m_ctrlAdjustingCondition.SetTextMatrix(2, 0, "ÚãÜÖüÞâ¦");
+		m_ctrlAdjustingCondition.SetTextMatrix(3, 0, "ÙÍøö÷ÎõóÕá(mg)");
+		m_ctrlAdjustingCondition.SetTextMatrix(4, 0, "ÙÍøöè¦ó¬(¡¾%)");
+	}
+
+	m_ctrlAdjustingCondition.SetColWidth(0, 2100);
+	for(i = 1 ; i <= MAX_NOZZLE/2 ; i++) m_ctrlAdjustingCondition.SetColWidth(i,1210/*1500*/);
+	m_ctrlAdjustingCondition.SetRowHeight(0,600);
+	for(i=1 ; i < 5 ; i++) m_ctrlAdjustingCondition.SetRowHeight(i,400);
+
+	if(g_nMeasureDisplayType == 0)
+	{
+		m_ctrlMeasuredData.ShowWindow(SW_SHOW);
+		m_ctrlMeasuredData2.ShowWindow(SW_HIDE);
+	}
+	else
+	{
+		m_ctrlMeasuredData.ShowWindow(SW_HIDE);
+		m_ctrlMeasuredData2.ShowWindow(SW_SHOW);
+	}
+
+	//	measure //
+	if(g_nMeasureDisplayType == 0)
+	{
+		m_ctrlMeasuredData.SetTextMatrix(0, 0, "Err(%)/Weight(mg)");
+		m_ctrlMeasuredData.SetColWidth(0, 2100);
+		for(i = 1 ; i <= MAX_NOZZLE/2 ; i++) m_ctrlMeasuredData.SetColWidth(i,1210); 
+		for(i = 0; i < 20; i++) m_ctrlMeasuredData.SetRowHeight(i,290); 
+	}
+	else
+	{
+		m_ctrlMeasuredData2.SetTextMatrix(0, 0, "Err(%) / Basic Weight(mg) / Total Weight(mg)");
+		m_ctrlMeasuredData2.SetColWidth(0, 2100);
+		for(i = 1 ; i <= MAX_NOZZLE/2 ; i++) m_ctrlMeasuredData2.SetColWidth(i,1210); 
+		for(i = 0; i < 10; i++) m_ctrlMeasuredData2.SetRowHeight(i,580); 		
+	}
+	
+	// data display (ÇÔ¼öÈ£Ãâ)..
+	SubDataProcess(0,8) ;//
+	SubDisplayAdjustingCondition(8); // head16~head9ÀÇ data
+
+	CString strTemp;
+	if(g_nMeasureDisplayType == 0)
+	{
+		strTemp = "Err(%)/Weight(mg)";
+		for(i = 0 ; i < 20 ; i++)
+		{
+			if(i==0)
+				str.Format("Data%d\n%s",i+1,strTemp);
+			else
+				str.Format("Data%d",i+1);				
+			m_ctrlMeasuredData.SetTextMatrix(i, 0 ,str);
+		}
+	}
+	else
+	{
+		strTemp = "Err(%)/1Dot Weight/\nTotal Weight(mg)";
+		for(i = 0 ; i < 10 ; i++)
+		{
+			m_ctrlMeasuredData2.SetRow(i);
+			m_ctrlMeasuredData2.SetCol(0);
+//			m_ctrlMeasuredData2.SetCellFontSize(9);
+			m_ctrlMeasuredData2.SetCellFontSize(7);		//ehji 150526
+			if(i==0)
+				str.Format("Data%d\n%s",i+1,strTemp);
+			else
+				str.Format("Data%d",i+1);				
+			m_ctrlMeasuredData2.SetTextMatrix(i, 0 ,str);
+
+		}		
+	}
+	// 
+	GetDlgItem(IDC_BTN_PREV)->EnableWindow(FALSE);
+	GetDlgItem(IDC_BTN_DOWN)->EnableWindow(FALSE);
+
+	GetDlgItem(IDC_INITIAL_VOLCALIB)->MoveWindow(0,0,0,0);
+
+	g_ManualApdReport = FALSE;
+	m_ctrlApdReport.SetCaption("APD º¸°í OFF");
+	m_ctrlApdReport.SetBackColor(YELLOW);
+
+	str.Format("%.2f", m_dAdjustError);
+	m_ctrlAdjustError.SetCaption(str);
+
+	str.Format("%d", m_nManuDummyCnt);
+	m_ctrlDummyCnt.SetCaption(str);
+
+	str.Format("%d", g_nManuMeasureLoopCount);
+	m_ctrlManuMeasureCount.SetCaption(str);
+
+//2010.12.02 by tskim ½ÂÇö
+	str.Format("%d",m_nDummyCycle);
+	m_ctrlDummyCycle.SetCaption(str);
+
+//	TIMER ½ÇÇà  
+	if(PC_TYPE == TRUE)	SetTimer(TIMER_ADJUST,500,NULL);
+	//
+	SetTimer(TIMER_ADJUST_MEASUREDISP,300,NULL);
+	SetTimer(TIMER_ADJUST_MSGDISP,200,NULL);
+	SetTimer(TIMER_BALANCE_MODEDISP,500,NULL);
+	pView->m_bBalanceModeDispEnable = TRUE;
+//
+	//m_ctrlVolCalib.Enabled(FALSE);
+	
+	// by ckh 
+	//m_ctrlMeasuredData.SetFontWidth(4);
+	//m_ctrlMeasuredData2.SetFontWidth(4);
+
+	m_ctrlMeasuredData .SetFontWidth(4);
+	m_ctrlMeasuredData2.SetFontWidth(4);
+
+//2011.04.27 by tskim
+	for(i=0;i<MAX_BAL;i++)
+	{
+		Balstate.bBalNormalState[i] = TRUE;
+		ThBal[i].nBalanceMode = 0;
+	}
+
+//2015.01.24 by tskim Section calibration Test
+#if !EQ
+//pDoc->m_structDataEditor.m_nCalibrationMode = 3;
+#endif	
+
+	if(pDoc->m_structDataEditor.m_nCalibrationMode == 0)
+	{
+		if(pView->m_nLanguage == 0)
+		str.Format("ÃøÁ¤ & Á¶Á¤\n<ADJUST>");
+		else if(pView->m_nLanguage == 1)
+		str.Format("Adjust & Calibration<ADJUST>");
+		else if(pView->m_nLanguage == 2)
+		str.Format("ö´ïÒÐàðàïÚ\n<ADJUST>");
+
+		m_ctrlTitle.SetCaption(str);
+		m_ctrlTitle.SetBackColor(RED);
+	}
+	else if(pDoc->m_structDataEditor.m_nCalibrationMode == 1)
+	{
+		if(pView->m_nLanguage == 0)
+		str.Format("ÃøÁ¤ & Á¶Á¤\n<CALIBRATION 1>\n3Point Cal");
+		else if(pView->m_nLanguage == 1)
+		str.Format("Adjust & Calibration\n<CALIBRATION 1>\n3Point Cal");
+		else if(pView->m_nLanguage == 2)
+		str.Format("ö´ïÒÐàðàïÚ\n<CALIBRATION 1>\n3Point Cal");
+
+		m_ctrlTitle.SetCaption(str);
+		m_ctrlTitle.SetBackColor(GREEN);
+	}
+	else if(pDoc->m_structDataEditor.m_nCalibrationMode == 2)
+	{
+		if(pView->m_nLanguage == 0)
+		str.Format("ÃøÁ¤ & Á¶Á¤\n<CALIBRATION 2>\nFull Cal");
+		else if(pView->m_nLanguage == 1)
+		str.Format("Adjust & Calibration\n<CALIBRATION 2>\nFull Cal");
+		else if(pView->m_nLanguage == 2)
+		str.Format("ö´ïÒÐàðàïÚ\n<CALIBRATION 2>\nFull Cal");
+
+		m_ctrlTitle.SetCaption(str);
+		m_ctrlTitle.SetBackColor(BLUE);
+	}
+	else if(pDoc->m_structDataEditor.m_nCalibrationMode == 3)//2015.01.24 by tskim Setion Calibration
+	{
+		if(pView->m_nLanguage == 0)
+		str.Format("ÃøÁ¤ & Á¶Á¤\n<CALIBRATION 3>\nFull Cal(1st)");
+		else if(pView->m_nLanguage == 1)
+		str.Format("Adjust & Calibration\n<CALIBRATION 3>\nFull Cal(1st)");
+		else if(pView->m_nLanguage == 2)
+		str.Format("ö´ïÒÐàðàïÚ\n<CALIBRATION 3>\nFull Cal(1st)");
+
+		m_ctrlTitle.SetCaption(str);
+		m_ctrlTitle.SetBackColor(ORANGE);
+	}
+	else if(pDoc->m_structDataEditor.m_nCalibrationMode == 4)//Section 1st
+	{
+		if(pView->m_nLanguage == 0)
+		str.Format("ÃøÁ¤ & Á¶Á¤\n<CALIBRATION 4>\nSection Cal");
+		else if(pView->m_nLanguage == 1)
+		str.Format("Adjust & Calibration\n<CALIBRATION 4>\nSection Cal");
+		else if(pView->m_nLanguage == 2)
+		str.Format("ö´ïÒÐàðàïÚ\n<CALIBRATION 4>\nSection Cal");
+
+		m_ctrlTitle.SetCaption(str);
+		m_ctrlTitle.SetBackColor(LIGHTCYAN);
+		m_ctrlTitle.SetForeColor(RED);
+	}
+	else if(pDoc->m_structDataEditor.m_nCalibrationMode == 5)//Section 1st
+	{
+		if(pView->m_nLanguage == 0)
+		str.Format("ÃøÁ¤ & Á¶Á¤\n<CALIBRATION 5>\nSection Cal(1st)");
+		else if(pView->m_nLanguage == 1)
+		str.Format("Adjust & Calibration\n<CALIBRATION 5>\nSection Cal(1st)");
+		else if(pView->m_nLanguage == 2)
+		str.Format("ö´ïÒÐàðàïÚ\n<CALIBRATION 5>\nSection Cal(1st)");
+
+		m_ctrlTitle.SetCaption(str);
+		m_ctrlTitle.SetBackColor(LIGHTMAGENTA);
+		m_ctrlTitle.SetForeColor(YELLOW);
+	}
+
+	if(pDoc->m_structDataEditor.m_nCalibrationMode == 0)
+		if(pView->m_nLanguage == 0)
+		str.Format("ÅäÃâ·® Á¶Á¤");
+		else if(pView->m_nLanguage == 1)
+		str.Format("Adjust");
+		else if(pView->m_nLanguage == 2)
+		str.Format("÷ÎõóÕáðàïÚ");
+
+	if(pDoc->m_structDataEditor.m_nCalibrationMode == 1)
+		if(pView->m_nLanguage == 0)
+		str.Format("ÅäÃâ·® ±³Á¤1\n3Point Cal");
+		else if(pView->m_nLanguage == 1)
+		str.Format("Calibration 1\n3Point Cal");
+		else if(pView->m_nLanguage == 2)
+		str.Format("÷ÎõóÕáÎèïá1\n3Point Cal");
+
+	if(pDoc->m_structDataEditor.m_nCalibrationMode == 2)
+		if(pView->m_nLanguage == 0)
+		str.Format("ÅäÃâ·® ±³Á¤2\nFull Cal");
+		else if(pView->m_nLanguage == 1)
+		str.Format("Calibration 2\nFull Cal");
+		else if(pView->m_nLanguage == 2)
+		str.Format("÷ÎõóÕáÎèïá2\nFull Cal");
+
+	if(pDoc->m_structDataEditor.m_nCalibrationMode == 3)//2015.01.24 by tskim Setion Calibration
+		if(pView->m_nLanguage == 0)
+		str.Format("ÅäÃâ·® ±³Á¤3\nFull Cal(1st)");
+		else if(pView->m_nLanguage == 1)
+		str.Format("Calibration 3\nFull Cal(1st)");
+		else if(pView->m_nLanguage == 2)
+		str.Format("÷ÎõóÕáÎèïá3\nFull Cal(1st)");
+
+	if(pDoc->m_structDataEditor.m_nCalibrationMode == 4)//2015.01.24 by tskim Setion Calibration
+		if(pView->m_nLanguage == 0)
+		str.Format("ÅäÃâ·® ±³Á¤4\nSection Cal");
+		else if(pView->m_nLanguage == 1)
+		str.Format("Calibration 4\nSection Cal");
+		else if(pView->m_nLanguage == 2)
+		str.Format("÷ÎõóÕáÎèïá4\nSection Cal");
+
+	if(pDoc->m_structDataEditor.m_nCalibrationMode == 5)//2015.01.24 by tskim Setion Calibration
+		if(pView->m_nLanguage == 0)
+		str.Format("ÅäÃâ·® ±³Á¤5\nSection Cal(1st)");
+		else if(pView->m_nLanguage == 1)
+		str.Format("Calibration 5\nSection Cal(1st)");
+		else if(pView->m_nLanguage == 2)
+		str.Format("÷ÎõóÕáÎèïá5\nSection Cal(1st)");
+	
+	m_ctrlAdjust.SetCaption(str);
+
+	if(pDoc->m_structDataEditor.m_nCalibrationMode > 0)
+	{
+		GetDlgItem(IDC_TARGET_MODE)->EnableWindow(TRUE);
+		GetDlgItem(IDC_TARGET_SET)->EnableWindow(TRUE);
+		GetDlgItem(IDC_CALIBRATION_APPLY)->EnableWindow(TRUE);	
+	}
+	else
+	{
+		GetDlgItem(IDC_TARGET_MODE)->EnableWindow(FALSE);
+		GetDlgItem(IDC_TARGET_SET)->EnableWindow(FALSE);
+		GetDlgItem(IDC_CALIBRATION_APPLY)->EnableWindow(FALSE);	
+	}
+
+	for(i=0;i<MAX_MEADATA_GETCOUNT1;i++)
+	{	for(j=0;j<MAX_NOZZLE;j++)	pView->m_bCalibUpDate1[j][i]=FALSE;		}
+	for(i=0;i<MAX_MEADATA_GETCOUNT2;i++)
+	{	for(j=0;j<MAX_NOZZLE;j++)	pView->m_bCalibUpDate2[j][i]=FALSE;		}
+//2015.01.24 by tskim Section Calibration 
+	for(i=0;i<MAX_MEADATA_GETCOUNT3;i++)
+	{	for(j=0;j<MAX_NOZZLE;j++)	pView->m_nCalibUpDate3[j][i]= -1;		}
+
+	GetDlgItem(IDC_MSFLEXGRID_VOLCALIB_RESULT2)->SetWindowPos( NULL,0,0,0,0, SWP_NOMOVE | SWP_SHOWWINDOW | SWP_NOZORDER );
+
+	if(!g_bMultiTargetMeas)
+	{
+		m_ctrlTargetMode.SetCaption("SINGLE TARGET");
+		m_ctrlTargetMode.SetBackColor(GREEN);
+		GetDlgItem(IDC_TARGET_SET)->EnableWindow(FALSE);
+	}
+	else
+	{
+		m_ctrlTargetMode.SetCaption("MULTI TARGET");
+		m_ctrlTargetMode.SetBackColor(YELLOW);
+		GetDlgItem(IDC_TARGET_SET)->EnableWindow(TRUE);
+	}
+
+ 	if(!g_bInitialShot)
+ 	{
+ 		m_ctrlInitialMode.SetCaption("INITIAL SHOT OFF");
+ 		m_ctrlInitialMode.SetBackColor(YELLOW);
+ 	}
+ 	else
+ 	{
+ 		m_ctrlInitialMode.SetCaption("INITIAL SHOT ON");
+ 		m_ctrlInitialMode.SetBackColor(GREEN);
+ 	}
+
+	if(pDoc->m_structDataEditor.m_nNzlMode == 1)
+	{
+		m_ctrlDropCount.SetCaption("N Module Aging");
+	}
+	else
+	{
+		if(pView->m_nLanguage == 0)
+		m_ctrlDropCount.SetCaption("Drop Ä«¿îÆ® ¼ÂÆÃ");	
+		else if(pView->m_nLanguage == 1)
+		m_ctrlDropCount.SetCaption("Drop Count Setting");
+		else if(pView->m_nLanguage == 2)
+		m_ctrlDropCount.SetCaption("Drop Count Setting");
+	}
+// 	if(pDoc->m_structDataEditor.m_nNzlMode == 1)
+// 	{
+// 		m_ctrlDropCount.SetEnabled(FALSE); 
+// 	}
+// 	else
+// 	{
+// 		m_ctrlDropCount.SetEnabled(TRUE); 
+// 	}
+
+
+//	GetDlgItem(IDC_TARGET_MODE)->SetWindowPos( NULL,0,0,0,0, SWP_NOMOVE | SWP_SHOWWINDOW | SWP_NOZORDER );
+//	GetDlgItem(IDC_TARGET_SET)->SetWindowPos( NULL,0,0,0,0, SWP_NOMOVE | SWP_SHOWWINDOW | SWP_NOZORDER );
+
+	if(pView->m_nMachineStatus == 0)
+	{
+		pView->m_pMcStatus = new CMcStatus();
+		pView->m_pMcStatus->Create(this);
+		pView->m_pMcStatus->ShowWindow(SW_SHOW);
+	}
+
+	
+	GetDlgItem(IDC_INITIAL_ONOFF)->SetWindowPos( NULL,0,0,0,0, SWP_NOMOVE | SWP_SHOWWINDOW | SWP_NOZORDER );
+
+	if ( pDoc->m_structDataEditor.m_nNzlMode == 1 )
+		GetDlgItem(IDC_CMD_DROP_COUNTING)->SetWindowPos( NULL,0,0,0,0, SWP_NOMOVE | SWP_SHOWWINDOW | SWP_NOZORDER );
+
+//	m_ctrlBalModeSet.SetBackColor(LIGHTGRAY);
+//	GetDlgItem(IDC_BAL_MODE_SET)->SetWindowPos( NULL,0,0,0,0, SWP_NOMOVE | SWP_SHOWWINDOW | SWP_NOZORDER );
+	pDoc->ReadNozzleCleanerData();
+
+	return TRUE;  // return TRUE unless you set the focus to a control
+	              // EXCEPTION: OCX Property Pages should return FALSE
+}
+
+void CAdjust::OnOK() 
+{
+	// TODO: Add extra validation here
+	
+//	CDialog::OnOK();
+}
+
+void CAdjust::OnCancel() 
+{
+	// TODO: Add extra cleanup here
+	
+//	CDialog::OnCancel();
+}
+
+void CAdjust::SubDisplayRecipeName()
+{
+	CMainFrame *pFrame = (CMainFrame *)AfxGetMainWnd();
+	CP8CA_LcDispDoc* pDoc = (CP8CA_LcDispDoc *)pFrame->GetActiveDocument();
+
+	CString str = "";
+
+	// Recipe Name ¼³Á¤
+	str.Format("%s|%s", pDoc->m_structOperatorModeRecipeData.strFrontRecipeName, pDoc->m_structOperatorModeRecipeData.strBackRecipeName);
+
+	m_ctrlRecipeName.SetCaption(str);
+}
+
+void CAdjust::SubVolCalibResult(int r, int c) 
+{
+	CMainFrame* pFrame = (CMainFrame*)AfxGetMainWnd();
+	CP8CA_LcDispView* pView = (CP8CA_LcDispView*)pFrame->GetActiveView();
+	CP8CA_LcDispDoc* pDoc = (CP8CA_LcDispDoc *)pFrame->GetActiveDocument();
+
+	CString str = "";
+	int i=0 , j=0;
+	double dCalibError = 0.0;
+	double dCalibWeight = 0.0;
+	long temp=0;
+	double Result=0;
+	int nTotalWeight=0;
+	CString strLog;	//150627 HSN 
+// 	m_ctrlVolCalibResult1.SetRows(MAX_MEADATA_GETCOUNT1+1);
+// 	m_ctrlVolCalibResult1.SetCols(MAX_NOZZLE/2+2);
+	
+	m_ctrlVolCalibResult1.ShowWindow(SW_HIDE);
+	for (i = 0 ; i< MAX_NOZZLE/2; i++) 
+	{
+		for(j=0 ; j<MAX_MEADATA_GETCOUNT1; j++) 
+		{
+			m_ctrlVolCalibResult1.SetRow(j+1);
+			if(pDoc->m_structDataEditor.m_nCalibrationMode == 1)
+				m_ctrlVolCalibResult1.SetCol(i+2);
+			else
+				m_ctrlVolCalibResult1.SetCol(i+1);				
+			m_ctrlVolCalibResult1.SetCellBackColor(WHITE);
+		}
+	}
+
+	for (i = 0 ; i< MAX_NOZZLE/2; i++) 
+	{
+		for(j=0 ; j<MAX_MEADATA_GETCOUNT1; j++) 
+		{
+			m_ctrlVolCalibResult1.SetRow(j+1);
+			if(pDoc->m_structDataEditor.m_nCalibrationMode == 1)
+				m_ctrlVolCalibResult1.SetCol(i+2);
+			else
+				m_ctrlVolCalibResult1.SetCol(i+1);
+			m_ctrlVolCalibResult1.SetCellFontSize(12);
+		}
+	}
+
+	m_ctrlVolCalibResult1.SetColWidth(0,1100);
+	m_ctrlVolCalibResult1.SetColWidth(1,1000);
+	m_ctrlVolCalibResult1.SetRowHeight(0,800);
+	
+	m_ctrlVolCalibResult1.SetTextMatrix(1,0,"+20%");
+	m_ctrlVolCalibResult1.SetTextMatrix(2,0,"0%");
+	m_ctrlVolCalibResult1.SetTextMatrix(3,0,"-20%");
+	for (i = 0 ; i< MAX_NOZZLE/2+2; i++) 
+		m_ctrlVolCalibResult1.SetColAlignment(i,4);
+
+	for (i = 0 ; i< MAX_NOZZLE/2; i++) 
+	{
+		m_ctrlVolCalibResult1.SetColWidth(i+2,1210);
+		for(j=0 ; j<MAX_MEADATA_GETCOUNT1; j++) 
+		{
+			m_ctrlVolCalibResult1.SetRowHeight(j+1,1200);
+		}
+	}
+
+
+	if(c == 0)
+	{
+		for (i = 0 ; i< MAX_NOZZLE/2; i++) 
+		{
+			str.Format("Head%d",i+1);
+			m_ctrlVolCalibResult1.SetTextMatrix(0,MAX_NOZZLE/2+1-i,str);
+			for(j=0 ; j<MAX_MEADATA_GETCOUNT1; j++) 
+			{
+				str.Format("%.3f / %.0f",pDoc->m_structCalibData[i].dMeasure[j][0],pDoc->m_structCalibData[i].dMeasure[j][1]);	// Volumn °ª
+				if(j == 0)
+				{
+					temp=(long)(pDoc->m_structAdjustCondition.dTargetWeight[i] * pDoc->m_structAdjustCondition.nDropCount[i]);
+					if((float)((pDoc->m_structAdjustCondition.dTargetWeight[i] * pDoc->m_structAdjustCondition.nDropCount[i])-temp)>=0.5)
+					{
+						Result=ceil((pDoc->m_structAdjustCondition.dTargetWeight[i] * pDoc->m_structAdjustCondition.nDropCount[i]));
+					}
+					else 
+					{
+						Result=floor((pDoc->m_structAdjustCondition.dTargetWeight[i] * pDoc->m_structAdjustCondition.nDropCount[i]));
+					}
+					
+					nTotalWeight = int(Result);
+					dCalibWeight = double(nTotalWeight*0.8);
+					dCalibError = ((pDoc->m_structCalibData[i].dMeasure[j][0]-dCalibWeight)/dCalibWeight)*100.0;
+
+//					strLog.Format("[3Point Cal]nTotalWeight %d dCalibWeight %f m_structCalibData[i].dMeasure[j][0] %f ", nTotalWeight, dCalibWeight, dCalibError);//150627 HSN 
+//					pView->SaveLog(0,strLog);
+
+					//2008.11.30 by tskim
+//					m_ctrlVolCalibResult1.SetRow(j+1);
+					m_ctrlVolCalibResult1.SetRow((m_ctrlVolCalibResult1.GetRows()-j)-1);
+					m_ctrlVolCalibResult1.SetCol(MAX_NOZZLE/2+1-i);
+					if(!pView->m_bCalibUpDate1[i][j])
+					{
+						m_ctrlVolCalibResult1.SetCellBackColor(WHITE);
+					}
+					else
+					{
+						strLog.Format("[3Point Cal]nTotalWeight %d dCalibWeight %f dCalibError %f ", nTotalWeight, dCalibWeight, dCalibError);	//150627 HSN 
+						pView->SaveLog(0,strLog);
+						if (dCalibError > pDoc->m_structAdjustCondition.dCalibrationInterlock) //150627 HSN 3point CalibrationInterlock Ãß°¡ 
+						{
+							m_ctrlVolCalibResult1.SetCellBackColor(RED);
+							g_bCalibrationStatus[i] = FALSE; //120419 by shlee	
+						}
+						else
+						{
+							m_ctrlVolCalibResult1.SetCellBackColor(YELLOW);								
+						}
+					}
+				}
+				if(j == 1)
+				{
+					temp=(long)(pDoc->m_structAdjustCondition.dTargetWeight[i] * pDoc->m_structAdjustCondition.nDropCount[i]);
+					if((float)((pDoc->m_structAdjustCondition.dTargetWeight[i] * pDoc->m_structAdjustCondition.nDropCount[i])-temp)>=0.5)
+					{
+						Result=ceil((pDoc->m_structAdjustCondition.dTargetWeight[i] * pDoc->m_structAdjustCondition.nDropCount[i]));
+					}
+					else 
+					{
+						Result=floor((pDoc->m_structAdjustCondition.dTargetWeight[i] * pDoc->m_structAdjustCondition.nDropCount[i]));
+					}
+					
+					nTotalWeight = int(Result);
+					dCalibWeight = double(nTotalWeight*1.0);
+					dCalibError = ((pDoc->m_structCalibData[i].dMeasure[j][0]-dCalibWeight)/dCalibWeight)*100.0;
+					
+					strLog.Format("[3Point Cal]nTotalWeight %d dCalibWeight %f m_structCalibData[i].dMeasure[j][0] %f ", nTotalWeight, dCalibWeight, dCalibError);	//150627 HSN 
+					pView->SaveLog(0,strLog);
+
+					//2008.11.30 by tskim
+					//m_ctrlVolCalibResult1.SetRow(j+1);
+					m_ctrlVolCalibResult1.SetRow((m_ctrlVolCalibResult1.GetRows()-j)-1);
+					m_ctrlVolCalibResult1.SetCol(MAX_NOZZLE/2+1-i);
+					if(!pView->m_bCalibUpDate1[i][j])
+					{
+						m_ctrlVolCalibResult1.SetCellBackColor(WHITE);
+					}
+					else
+					{
+						strLog.Format("[3Point Cal]nTotalWeight %d dCalibWeight %f dCalibError %f ", nTotalWeight, dCalibWeight, dCalibError);	//150627 HSN 
+						pView->SaveLog(0,strLog);
+						if (dCalibError > pDoc->m_structAdjustCondition.dCalibrationInterlock) //150627 HSN 3point CalibrationInterlock Ãß°¡ 
+						{
+							m_ctrlVolCalibResult1.SetCellBackColor(RED);
+							g_bCalibrationStatus[i] = FALSE; //120419 by shlee	
+						}
+						else
+						{
+							m_ctrlVolCalibResult1.SetCellBackColor(YELLOW);								
+						}			
+					}
+				}
+				if(j == 2)
+				{
+					temp=(long)(pDoc->m_structAdjustCondition.dTargetWeight[i] * pDoc->m_structAdjustCondition.nDropCount[i]);
+					if((float)((pDoc->m_structAdjustCondition.dTargetWeight[i] * pDoc->m_structAdjustCondition.nDropCount[i])-temp)>=0.5)
+					{
+						Result=ceil((pDoc->m_structAdjustCondition.dTargetWeight[i] * pDoc->m_structAdjustCondition.nDropCount[i]));
+					}
+					else 
+					{
+						Result=floor((pDoc->m_structAdjustCondition.dTargetWeight[i] * pDoc->m_structAdjustCondition.nDropCount[i]));
+					}
+					
+					nTotalWeight = int(Result);
+					dCalibWeight = double(nTotalWeight*1.2);
+					dCalibError = ((pDoc->m_structCalibData[i].dMeasure[j][0]-dCalibWeight)/dCalibWeight)*100.0;
+
+//					strLog.Format("[3Point Cal]nTotalWeight %d dCalibWeight %f m_structCalibData[i].dMeasure[j][0] %f ", nTotalWeight, dCalibWeight, dCalibError);	//150627 HSN 
+//					pView->SaveLog(0,strLog);
+					//2008.11.30 by tskim
+					//m_ctrlVolCalibResult1.SetRow(j+1);
+					m_ctrlVolCalibResult1.SetRow((m_ctrlVolCalibResult1.GetRows()-j)-1);
+					m_ctrlVolCalibResult1.SetCol(MAX_NOZZLE/2+1-i);
+					if(!pView->m_bCalibUpDate1[i][j])
+					{
+						m_ctrlVolCalibResult1.SetBackColor(WHITE);
+					}
+					else
+					{
+						strLog.Format("[3Point Cal]nTotalWeight %d dCalibWeight %f dCalibError %f ", nTotalWeight, dCalibWeight, dCalibError);	//150627 HSN 
+						pView->SaveLog(0,strLog);
+						if (dCalibError > pDoc->m_structAdjustCondition.dCalibrationInterlock) //150627 HSN 3point CalibrationInterlock Ãß°¡ 
+						{
+							m_ctrlVolCalibResult1.SetCellBackColor(RED);
+							g_bCalibrationStatus[i] = FALSE; //120419 by shlee	
+						}
+						else
+						{
+							m_ctrlVolCalibResult1.SetCellBackColor(YELLOW);								
+						}			
+					}
+				}
+				
+				//m_ctrlVolCalibResult1.SetTextMatrix(j+1, i+2 ,(LPCSTR)str);
+				m_ctrlVolCalibResult1.SetTextMatrix((MAX_MEADATA_GETCOUNT1-j), MAX_NOZZLE/2+1-i ,(LPCSTR)str);
+			}
+		}
+	}
+	else if(c==8)
+	{
+		for(i = MAX_NOZZLE/2 ; i< MAX_NOZZLE; i++)
+		{
+			str.Format("Head%d",i+1);
+			m_ctrlVolCalibResult1.SetTextMatrix(0,MAX_NOZZLE-i+1,str);
+			for(j=0 ; j<MAX_MEADATA_GETCOUNT1; j++) 
+			{
+				str.Format("%.3f / %.0f",pDoc->m_structCalibData[i].dMeasure[j][0],pDoc->m_structCalibData[i].dMeasure[j][1]);	// Volumn °ª
+				if(j == 0)
+				{
+					temp=(long)(pDoc->m_structAdjustCondition.dTargetWeight[i] * pDoc->m_structAdjustCondition.nDropCount[i]);
+					if((float)((pDoc->m_structAdjustCondition.dTargetWeight[i] * pDoc->m_structAdjustCondition.nDropCount[i])-temp)>=0.5)
+					{
+						Result=ceil((pDoc->m_structAdjustCondition.dTargetWeight[i] * pDoc->m_structAdjustCondition.nDropCount[i]));
+					}
+					else 
+					{
+						Result=floor((pDoc->m_structAdjustCondition.dTargetWeight[i] * pDoc->m_structAdjustCondition.nDropCount[i]));
+					}
+					
+					nTotalWeight = int(Result);
+					dCalibWeight = double(nTotalWeight*0.8);
+					dCalibError = ((pDoc->m_structCalibData[i].dMeasure[j][0]-dCalibWeight)/dCalibWeight)*100.0;
+
+//					strLog.Format("[3Point Cal]nTotalWeight %d dCalibWeight %f m_structCalibData[i].dMeasure[j][0] %f ", nTotalWeight, dCalibWeight, dCalibError);	//150627 HSN 
+//					pView->SaveLog(0,strLog);
+					//2008.11.30 by tskim
+					//m_ctrlVolCalibResult1.SetRow(j+1);
+					m_ctrlVolCalibResult1.SetRow((m_ctrlVolCalibResult1.GetRows()-j)-1);
+					m_ctrlVolCalibResult1.SetCol(MAX_NOZZLE-i+1);
+					if(!pView->m_bCalibUpDate1[i][j])
+					{
+						m_ctrlVolCalibResult1.SetCellBackColor(WHITE);
+					}
+					else
+					{
+						strLog.Format("[3Point Cal]nTotalWeight %d dCalibWeight %f dCalibError %f ", nTotalWeight, dCalibWeight, dCalibError);	//150627 HSN 
+						pView->SaveLog(0,strLog);
+						if (dCalibError > pDoc->m_structAdjustCondition.dCalibrationInterlock) //150627 HSN 3point CalibrationInterlock Ãß°¡ 
+						{
+							m_ctrlVolCalibResult1.SetCellBackColor(RED);
+							g_bCalibrationStatus[i] = FALSE; //120419 by shlee	
+						}
+						else
+						{
+							m_ctrlVolCalibResult1.SetCellBackColor(YELLOW);								
+						}				
+					}
+				}
+				if(j == 1)
+				{
+					temp=(long)(pDoc->m_structAdjustCondition.dTargetWeight[i] * pDoc->m_structAdjustCondition.nDropCount[i]);
+					if((float)((pDoc->m_structAdjustCondition.dTargetWeight[i] * pDoc->m_structAdjustCondition.nDropCount[i])-temp)>=0.5)
+					{
+						Result=ceil((pDoc->m_structAdjustCondition.dTargetWeight[i] * pDoc->m_structAdjustCondition.nDropCount[i]));
+					}
+					else 
+					{
+						Result=floor((pDoc->m_structAdjustCondition.dTargetWeight[i] * pDoc->m_structAdjustCondition.nDropCount[i]));
+					}
+					
+					nTotalWeight = int(Result);
+					dCalibWeight = double(nTotalWeight*1.0);
+					dCalibError = ((pDoc->m_structCalibData[i].dMeasure[j][0]-dCalibWeight)/dCalibWeight)*100.0;
+
+					//2008.11.30 by tskim
+					//m_ctrlVolCalibResult1.SetRow(j+1);
+					m_ctrlVolCalibResult1.SetRow((m_ctrlVolCalibResult1.GetRows()-j)-1);
+					m_ctrlVolCalibResult1.SetCol(MAX_NOZZLE-i+1);
+					if(!pView->m_bCalibUpDate1[i][j])
+					{
+						m_ctrlVolCalibResult1.SetCellBackColor(WHITE);
+					}
+					else
+					{
+						strLog.Format("[3Point Cal]nTotalWeight %d dCalibWeight %f dCalibError %f ", nTotalWeight, dCalibWeight, dCalibError);	//150627 HSN 
+						pView->SaveLog(0,strLog);
+						if (dCalibError > pDoc->m_structAdjustCondition.dCalibrationInterlock) //150627 HSN 3point CalibrationInterlock Ãß°¡ 
+						{
+							m_ctrlVolCalibResult1.SetCellBackColor(RED);
+							g_bCalibrationStatus[i] = FALSE; //120419 by shlee	
+						}
+						else
+						{
+							m_ctrlVolCalibResult1.SetCellBackColor(YELLOW);								
+						}					
+					}
+				}
+				if(j == 2)
+				{
+					temp=(long)(pDoc->m_structAdjustCondition.dTargetWeight[i] * pDoc->m_structAdjustCondition.nDropCount[i]);
+					if((float)((pDoc->m_structAdjustCondition.dTargetWeight[i] * pDoc->m_structAdjustCondition.nDropCount[i])-temp)>=0.5)
+					{
+						Result=ceil((pDoc->m_structAdjustCondition.dTargetWeight[i] * pDoc->m_structAdjustCondition.nDropCount[i]));
+					}
+					else 
+					{
+						Result=floor((pDoc->m_structAdjustCondition.dTargetWeight[i] * pDoc->m_structAdjustCondition.nDropCount[i]));
+					}
+					
+					nTotalWeight = int(Result);
+					dCalibWeight = double(nTotalWeight*1.2);
+					dCalibError = ((pDoc->m_structCalibData[i].dMeasure[j][0]-dCalibWeight)/dCalibWeight)*100.0;
+
+
+					//2008.11.30 by tskim
+					//m_ctrlVolCalibResult1.SetRow(j+1);
+					m_ctrlVolCalibResult1.SetRow((m_ctrlVolCalibResult1.GetRows()-j)-1);
+					m_ctrlVolCalibResult1.SetCol(MAX_NOZZLE-i+1);
+
+					if(!pView->m_bCalibUpDate1[i][j])
+					{
+						m_ctrlVolCalibResult1.SetBackColor(WHITE);
+					}
+					else
+					{
+						strLog.Format("[3Point Cal]nTotalWeight %d dCalibWeight %f m_structCalibData[i].dMeasure[j][0] %f ", nTotalWeight, dCalibWeight, dCalibError);	//150627 HSN 
+						pView->SaveLog(0,strLog);
+						if (dCalibError > pDoc->m_structAdjustCondition.dCalibrationInterlock) //150627 HSN 3point CalibrationInterlock Ãß°¡ 
+						{
+							m_ctrlVolCalibResult1.SetCellBackColor(RED);
+							g_bCalibrationStatus[i] = FALSE; //120419 by shlee	
+						}
+						else
+						{
+							m_ctrlVolCalibResult1.SetCellBackColor(YELLOW);								
+						}				
+					}
+				}
+				
+				m_ctrlVolCalibResult1.SetTextMatrix((MAX_MEADATA_GETCOUNT1-j), MAX_NOZZLE-i+1 ,(LPCSTR)str);
+			}
+		}		
+	}
+	m_ctrlVolCalibResult1.ShowWindow(SW_SHOW);
+}
+
+// SubDataProcess( data Group¼±ÅÃ, head Group ¼±ÅÃ)
+void CAdjust::SubDataProcess(int r , int c) 
+{
+	CMainFrame *pFrame = (CMainFrame *)AfxGetMainWnd();
+	CP8CA_LcDispDoc* pDoc = (CP8CA_LcDispDoc *)pFrame->GetActiveDocument();
+
+	CString str = "",strTemp1 = "";
+	int i = 0 , j = 0;
+	double error_percentage =0.0;
+
+	// data¸¦ Control¼³Á¤ // measure
+
+	if(g_nMeasureDisplayType == 0)
+	{
+		m_ctrlMeasuredData.ShowWindow(SW_HIDE);
+		for(i =0 ; i <m_ctrlMeasuredData.GetRows() ; i ++) // 20..
+		{
+			for (j =0 ; j <m_ctrlMeasuredData.GetCols() -1; j++) // 8-1..
+			{
+				
+				if(g_bMultiTargetMeas)
+					error_percentage = (pDoc->m_dMeasuredData[j+c][i+r] - pDoc->m_dMeasuredData_Target[j+c][i+r])*100/pDoc->m_dMeasuredData_Target[j+c][i+r];
+				else
+					error_percentage = (pDoc->m_dMeasuredData[j+c][i+r] - pDoc->m_structAdjustCondition.dTargetWeight[j+c])*100/pDoc->m_structAdjustCondition.dTargetWeight[j+c];
+				
+				//			error_percentage = (pDoc->m_dMeasuredData[j+c][i+r] - pDoc->m_structAdjustCondition.dTargetWeight[j+c])*100/pDoc->m_structAdjustCondition.dTargetWeight[j+c];
+				str.Format("%.3f/%.4f",error_percentage,pDoc->m_dMeasuredData[j+c][i+r]);
+				m_ctrlMeasuredData.SetTextMatrix(i, (MAX_NOZZLE/2+1)-(j+1) ,(LPCSTR)str);
+				//
+				m_ctrlMeasuredData.SetRow(i);
+				m_ctrlMeasuredData.SetCol((MAX_NOZZLE/2+1)-(j+1));
+
+				if(error_percentage > 0)
+				{
+					error_percentage = error_percentage - 0.00000001;
+				}
+				else
+				{
+					error_percentage = error_percentage + 0.00000001;
+				}
+				
+				if(Drop_Info.manu_head_job[j+c] == TRUE)
+				{
+					if((ThBal[BALID1].bAdjust == TRUE)||(ThBal[BALID2].bAdjust == TRUE)||(ThBal[BALID3].bAdjust == TRUE)
+						||(ThBal[BALID4].bAdjust == TRUE)||(ThBal[BALID5].bAdjust == TRUE)||(ThBal[BALID6].bAdjust == TRUE)
+						|| (ThBal[BALID7].bAdjust == TRUE) || (ThBal[BALID8].bAdjust == TRUE))
+					{
+						if(fabs(error_percentage) <= m_dAdjustError)
+							m_ctrlMeasuredData.SetCellBackColor(GREEN);
+						else
+							m_ctrlMeasuredData.SetCellBackColor(WHITE);
+					}
+					else
+					{
+						if(fabs(error_percentage) <= pDoc->m_structAdjustCondition.dTargetError[j+c])
+							m_ctrlMeasuredData.SetCellBackColor(GREEN);
+						else
+							m_ctrlMeasuredData.SetCellBackColor(WHITE);
+					}
+				}
+				else
+				{
+					m_ctrlMeasuredData.SetCellBackColor(WHITEGRAY);
+				}
+				//
+			}
+		}
+		m_ctrlMeasuredData.ShowWindow(SW_SHOW);
+	}
+	else
+	{
+		m_ctrlMeasuredData2.ShowWindow(SW_HIDE);
+		for(i =0 ; i <m_ctrlMeasuredData2.GetRows() ; i ++) // 10..
+		{
+			for (j =0 ; j <m_ctrlMeasuredData2.GetCols() -1; j++) // 8-1..
+			{
+				
+				if(g_bMultiTargetMeas)
+					error_percentage = (pDoc->m_dMeasuredData[j+c][i+r] - pDoc->m_dMeasuredData_Target[j+c][i+r])*100/pDoc->m_dMeasuredData_Target[j+c][i+r];
+				else
+					error_percentage = (pDoc->m_dMeasuredData[j+c][i+r] - pDoc->m_structAdjustCondition.dTargetWeight[j+c])*100/pDoc->m_structAdjustCondition.dTargetWeight[j+c];
+				
+				//			error_percentage = (pDoc->m_dMeasuredData[j+c][i+r] - pDoc->m_structAdjustCondition.dTargetWeight[j+c])*100/pDoc->m_structAdjustCondition.dTargetWeight[j+c];
+				str.Empty();strTemp1.Empty();
+				strTemp1.Format("%.3f/\n",error_percentage);
+				str += strTemp1;
+				strTemp1.Format("%.4f/\n",pDoc->m_dMeasuredData[j+c][i+r]);
+				str += strTemp1;
+			//	strTemp1.Format("%.3f",pDoc->m_dMeasuredData_Total[j+c][i+r]);
+				strTemp1.Format("%.3f/\n",pDoc->m_dMeasuredData_Total[j+c][i+r]);
+				str += strTemp1;
+				if(pDoc->m_structDataEditor.m_bSelectDropMode == TRUE)  //150611 HSN
+				{
+					strTemp1.Format("%.3f",Drop_Info.m_dFlexibeDistPerDrop[j+c]); //m_dFlexibeDistPerDrop[j+c]);	// 150526 ehji DisperDrop Display Ãß°¡.
+					str += strTemp1;				
+				}
+				else
+				{
+					strTemp1.Format("%.3f",Drop_Info.m_dDistPerDrop[j+c]); //m_dFlexibeDistPerDrop[j+c]);	// 150526 ehji DisperDrop Display Ãß°¡.
+					str += strTemp1;					
+				}
+				
+				m_ctrlMeasuredData2.SetTextMatrix(i, (MAX_NOZZLE/2+1)-(j+1) ,(LPCSTR)str);
+				//
+				m_ctrlMeasuredData2.SetRow(i);
+				m_ctrlMeasuredData2.SetCol((MAX_NOZZLE/2+1)-(j+1));
+//				m_ctrlMeasuredData2.SetCellFontSize(9);
+				m_ctrlMeasuredData2.SetCellFontSize(7);		//ehji 150526
+				m_ctrlMeasuredData2.SetColAlignment((MAX_NOZZLE/2+1)-(j+1),4);
+				if(error_percentage > 0)
+				{
+					error_percentage = error_percentage - 0.00000001;
+				}
+				else
+				{
+					error_percentage = error_percentage + 0.00000001;
+				}
+				
+				if(Drop_Info.manu_head_job[j+c] == TRUE)
+				{
+					if((ThBal[BALID1].bAdjust == TRUE)||(ThBal[BALID2].bAdjust == TRUE)||(ThBal[BALID3].bAdjust == TRUE)
+						||(ThBal[BALID4].bAdjust == TRUE)||(ThBal[BALID5].bAdjust == TRUE)||(ThBal[BALID6].bAdjust == TRUE)
+						|| (ThBal[BALID7].bAdjust == TRUE) || (ThBal[BALID8].bAdjust == TRUE))
+					{
+						if(fabs(error_percentage) <= m_dAdjustError)
+							m_ctrlMeasuredData2.SetCellBackColor(GREEN);
+						else
+							m_ctrlMeasuredData2.SetCellBackColor(WHITE);
+					}
+					else
+					{
+						if(fabs(error_percentage) <= pDoc->m_structAdjustCondition.dTargetError[j+c])
+							m_ctrlMeasuredData2.SetCellBackColor(GREEN);
+						else
+							m_ctrlMeasuredData2.SetCellBackColor(WHITE);
+					}
+				}
+				else
+				{
+					m_ctrlMeasuredData2.SetCellBackColor(WHITEGRAY);
+				}
+				//
+			}
+		}
+		m_ctrlMeasuredData2.ShowWindow(SW_SHOW);
+	}
+
+//
+}
+
+void CAdjust::SubLoopCountProcess() 
+{
+	UINT nsel1=0, nsel2=0, nsel3=0, nsel4=0, nsel5=0, nsel6=0, nsel7=0, nsel8=0;
+
+	////////////////////////////////////
+	nsel1 = ThBal[BALID1].nHeadSelected;
+	nsel2 = ThBal[BALID2].nHeadSelected;
+	nsel3 = ThBal[BALID3].nHeadSelected;
+	nsel4 = ThBal[BALID4].nHeadSelected;
+	nsel5 = ThBal[BALID5].nHeadSelected;
+	nsel6 = ThBal[BALID6].nHeadSelected;
+	nsel7 = ThBal[BALID7].nHeadSelected;
+	nsel8 = ThBal[BALID8].nHeadSelected;
+	
+	//////////////////////////////////////////////////////////  
+	if(nsel1 == 0)			{ m_str1.Format("%d",ThBal[BALID1].nLoopCount);	m_ctrlLoopCount1.SetCaption(m_str1);}
+	else if(nsel1 == 1)		{ m_str1.Format("%d",ThBal[BALID1].nLoopCount);	m_ctrlLoopCount2.SetCaption(m_str1);}
+	if(nsel2 == 2)			{ m_str2.Format("%d",ThBal[BALID2].nLoopCount);	m_ctrlLoopCount3.SetCaption(m_str2);}
+	else if(nsel2 == 3)		{ m_str2.Format("%d",ThBal[BALID2].nLoopCount);	m_ctrlLoopCount4.SetCaption(m_str2);}
+	if(nsel3 == 4)   		{ m_str3.Format("%d",ThBal[BALID3].nLoopCount);	m_ctrlLoopCount5.SetCaption(m_str3);}
+	else if(nsel3 == 5)		{ m_str3.Format("%d",ThBal[BALID3].nLoopCount);	m_ctrlLoopCount6.SetCaption(m_str3);}
+	if(nsel4 == 6)			{ m_str4.Format("%d",ThBal[BALID4].nLoopCount);	m_ctrlLoopCount7.SetCaption(m_str4);}
+	else if(nsel4 == 7)		{ m_str4.Format("%d",ThBal[BALID4].nLoopCount);	m_ctrlLoopCount8.SetCaption(m_str4);}
+	if(nsel5 == 8)			{ m_str5.Format("%d",ThBal[BALID5].nLoopCount);	m_ctrlLoopCount9.SetCaption(m_str5);}		
+	else if(nsel5 == 9)		{ m_str5.Format("%d",ThBal[BALID5].nLoopCount);	m_ctrlLoopCount10.SetCaption(m_str5);}
+	if(nsel6 == 10)			{ m_str6.Format("%d",ThBal[BALID6].nLoopCount);	m_ctrlLoopCount11.SetCaption(m_str6);}		
+	else if(nsel6 == 11)	{ m_str6.Format("%d",ThBal[BALID6].nLoopCount);	m_ctrlLoopCount12.SetCaption(m_str6);}
+	if(nsel7 == 12)			{ m_str7.Format("%d",ThBal[BALID7].nLoopCount);	m_ctrlLoopCount13.SetCaption(m_str7);}		
+	else if(nsel7 == 13)	{ m_str7.Format("%d",ThBal[BALID7].nLoopCount);	m_ctrlLoopCount14.SetCaption(m_str7);}
+	if(nsel8 == 14)			{ m_str8.Format("%d",ThBal[BALID8].nLoopCount);	m_ctrlLoopCount15.SetCaption(m_str8);}
+	else if(nsel8 == 15)	{ m_str8.Format("%d",ThBal[BALID8].nLoopCount);	m_ctrlLoopCount16.SetCaption(m_str8);}
+}
+
+void CAdjust::SubDisplayAdjustingCondition(int c)
+{
+	CMainFrame *pFrame = (CMainFrame *)AfxGetMainWnd();
+	CP8CA_LcDispDoc* pDoc = (CP8CA_LcDispDoc *)pFrame->GetActiveDocument();
+
+	CString str = "";
+	int i = 0 ; 
+
+	int m_nBlockNum[MAX_NOZZLE] = {0,};
+
+	// c==0 head1~head7ÀÇ dataÂüÁ¶ // c==8 head8~head15ÀÇ dataÂüÁ¶..
+	for (i =0 ; i <m_ctrlAdjustingCondition.GetCols() -1; i++)
+	{
+		str.Format("%3d",pDoc->m_structAdjustCondition.nDropCount[i+c]);
+		m_ctrlAdjustingCondition.SetTextMatrix(1, (MAX_NOZZLE/2+1)-(i+1), (LPCSTR)str);
+		//
+		str.Format("%3d",pDoc->m_structAdjustCondition.nLoopCount[i+c]);
+		m_ctrlAdjustingCondition.SetTextMatrix(2, (MAX_NOZZLE/2+1)-(i+1), (LPCSTR)str);
+		//
+		str.Format("%2.3f",pDoc->m_structAdjustCondition.dTargetWeight[i+c]);
+		m_ctrlAdjustingCondition.SetTextMatrix(3, (MAX_NOZZLE/2+1)-(i+1), (LPCSTR)str);
+		//
+		str.Format("%2.2f",pDoc->m_structAdjustCondition.dTargetError[i+c]);
+		m_ctrlAdjustingCondition.SetTextMatrix(4, (MAX_NOZZLE/2+1)-(i+1), (LPCSTR)str);
+	}
+//
+	if(c == 0)
+	{
+		for(i = 0 ; i < MAX_NOZZLE/2 ; i++)
+		{
+//2014.03.25 by tskim
+//			m_nBlockNum[i] = int(floor(pDoc->m_structDataEditor.m_dSuctionVolumn[i]/(pDoc->m_structAdjustCondition.dTargetWeight[i]*1.2*pDoc->m_structAdjustCondition.nDropCount[i])));
+			
+			if(Drop_Info.manu_head_job[i] == TRUE)
+			{
+				m_ctrlAdjustingCondition.SetRow(0);
+				m_ctrlAdjustingCondition.SetCol((MAX_NOZZLE/2+1)-(i+1));
+				m_ctrlAdjustingCondition.SetCellBackColor(GREEN);
+			}
+			else
+			{
+				m_ctrlAdjustingCondition.SetRow(0);
+				m_ctrlAdjustingCondition.SetCol((MAX_NOZZLE/2+1)-(i+1));
+				m_ctrlAdjustingCondition.SetCellBackColor(WHITEGRAY);
+			}
+			if(pDoc->m_structDataEditor.m_nCalibrationMode == 2 || pDoc->m_structDataEditor.m_nCalibrationMode == 3)//2015.01.24 by tskim
+			{
+				//str.Format("H%d(%d)",i+1 + c,m_nBlockNum[i+c]);
+				str.Format("H%d(%d)",i+1 + c,pDoc->m_structDataEditor.m_nLineDropBlockNum[i+c]);//2014.03.25 by tskim			
+			}
+			else
+				str.Format("H%d",i+1 + c);
+			m_ctrlAdjustingCondition.SetTextMatrix(0, (MAX_NOZZLE/2+1)-(i+1) ,str);
+		}
+	}
+	else
+	{
+		for(i = 0 ; i < MAX_NOZZLE/2 ; i++)
+		{
+//2014.03.25 by tskim
+//			m_nBlockNum[i+MAX_NOZZLE/2] = int(floor(pDoc->m_structDataEditor.m_dSuctionVolumn[i+MAX_NOZZLE/2]/(pDoc->m_structAdjustCondition.dTargetWeight[i+MAX_NOZZLE/2]*1.2*pDoc->m_structAdjustCondition.nDropCount[i+MAX_NOZZLE/2])));
+
+			if(Drop_Info.manu_head_job[i+MAX_NOZZLE/2] == TRUE)
+			{
+				m_ctrlAdjustingCondition.SetRow(0);
+				m_ctrlAdjustingCondition.SetCol((MAX_NOZZLE/2+1)-(i+1));
+				m_ctrlAdjustingCondition.SetCellBackColor(GREEN);
+			}
+			else
+			{
+				m_ctrlAdjustingCondition.SetRow(0);
+				m_ctrlAdjustingCondition.SetCol((MAX_NOZZLE/2+1)-(i+1));
+				m_ctrlAdjustingCondition.SetCellBackColor(WHITEGRAY);
+			}
+			if(pDoc->m_structDataEditor.m_nCalibrationMode == 2 || pDoc->m_structDataEditor.m_nCalibrationMode == 3)//2015.01.24 by tskim
+			{
+				//str.Format("H%d(%d)",i+1 + c,m_nBlockNum[i+c]);
+				str.Format("H%d(%d)",i+1 + c,pDoc->m_structDataEditor.m_nLineDropBlockNum[i+c]);//2014.03.25 by tskim
+			}
+			else
+				str.Format("H%d",i+1 + c);
+			m_ctrlAdjustingCondition.SetTextMatrix(0, (MAX_NOZZLE/2+1)-(i+1) ,str);
+		}
+
+//		for(i = 1 ; i <= MAX_NOZZLE/2; i++)
+//		{
+//			str.Format("      H%d",i+(MAX_NOZZLE/2));
+//			m_ctrlAdjustingCondition.SetTextMatrix(0, (MAX_NOZZLE/2+1)-i ,str);
+//		}
+	}
+
+// 	for(i = 1 ; i <= MAX_NOZZLE/2; i++)
+// 	{
+// 
+// 	}
+//
+}
+
+void CAdjust::OnBtnPrev() //Head16~Head9
+{
+	CMainFrame *pFrame = (CMainFrame *)AfxGetMainWnd();
+	CP8CA_LcDispDoc* pDoc = (CP8CA_LcDispDoc *)pFrame->GetActiveDocument();
+	//
+	CString str = "";
+	int i = 0;
+	m_nC = MAX_NOZZLE/2; 
+
+	// dataº¯°æ display..
+	if(	ThreadStage.AdjustInitCode!='G')
+	{
+		SubDataProcess(m_nR , m_nC)	;
+		SubDisplayAdjustingCondition(m_nC); // head1~head6 adjusting condition
+	}
+	else
+	{
+		if(pDoc->m_structDataEditor.m_nCalibrationMode == 1)
+			SubVolCalibResult(m_nR, m_nC);	
+		else if(pDoc->m_structDataEditor.m_nCalibrationMode == 2 || pDoc->m_structDataEditor.m_nCalibrationMode == 3)
+			SubFlexibleResult(m_nR, m_nC);
+		else if(pDoc->m_structDataEditor.m_nCalibrationMode == 4 || pDoc->m_structDataEditor.m_nCalibrationMode == 5)//2015.01.24 by tskim Section Calibration
+			SubSectionCalibResult(m_nR, m_nC);
+		SubDisplayAdjustingCondition(m_nC); // head1~head6 adjusting condition
+//		GetDlgItem(IDC_MSFLEXGRID_VOLCALIB_RESULT)->ShowWindow(SW_SHOW);
+//		GetDlgItem(IDC_MSFLEXGRID_VOLCALIB_RESULT2)->ShowWindow(SW_HIDE);
+	}
+
+	//
+	GetDlgItem(IDC_BTN_PREV)->EnableWindow(FALSE);
+	GetDlgItem(IDC_BTN_NEXT)->EnableWindow(TRUE);
+
+	// adjust displayµÇ´Â head# º¯°æ..
+//	for(i = 0 ; i < MAX_NOZZLE/2 ; i++)
+//	{
+//		str.Format("H%d",i+1+m_nC);
+//		m_ctrlAdjustingCondition.SetTextMatrix(0, (MAX_NOZZLE/2+1)-(i+1) ,str);
+//	}
+//
+}
+
+void CAdjust::OnBtnNext() //Head8~Head1
+{
+	CMainFrame *pFrame = (CMainFrame *)AfxGetMainWnd();
+	CP8CA_LcDispDoc* pDoc = (CP8CA_LcDispDoc *)pFrame->GetActiveDocument();
+
+	CString str = "";
+	int i = 0;
+	m_nC = 0;
+
+	if(	ThreadStage.AdjustInitCode!='G')
+	{
+		SubDataProcess(m_nR , m_nC)	;
+		SubDisplayAdjustingCondition(m_nC); // head8~head1 adjusting condition
+	}
+	else
+	{
+		if(pDoc->m_structDataEditor.m_nCalibrationMode == 1)
+			SubVolCalibResult(m_nR, m_nC);	
+		else if(pDoc->m_structDataEditor.m_nCalibrationMode == 2 || pDoc->m_structDataEditor.m_nCalibrationMode == 3)
+			SubFlexibleResult(m_nR, m_nC);
+		else if(pDoc->m_structDataEditor.m_nCalibrationMode == 4 || pDoc->m_structDataEditor.m_nCalibrationMode == 5)//2015.01.24 by tskim Section Calibration
+			SubSectionCalibResult(m_nR, m_nC);
+		SubDisplayAdjustingCondition(m_nC); // head8~head1 adjusting condition
+//		GetDlgItem(IDC_MSFLEXGRID_VOLCALIB_RESULT)->ShowWindow(SW_HIDE);
+//		GetDlgItem(IDC_MSFLEXGRID_VOLCALIB_RESULT2)->ShowWindow(SW_SHOW);
+	}
+
+	//
+	GetDlgItem(IDC_BTN_NEXT)->EnableWindow(FALSE);
+	GetDlgItem(IDC_BTN_PREV)->EnableWindow(TRUE);
+	//
+//	for(i = 0 ; i < MAX_NOZZLE/2 ; i++)
+//	{
+//		str.Format("H%d",i+1 + m_nC);
+//		m_ctrlAdjustingCondition.SetTextMatrix(0, (MAX_NOZZLE/2+1)-(i+1) ,str);
+//	}
+}
+
+void CAdjust::OnBtnUp() 
+{
+	if(	ThreadStage.AdjustInitCode=='G')	return;
+
+	CString str=""; int i=0;
+	CString strTemp;
+	if(g_nMeasureDisplayType == 0)
+	{
+		if(m_nR < MAX_MEASURED_DATA -20) 
+		{
+			m_nR = m_nR + 20 ; // 20°³ÀÇ data¸¦ Ç¥Çö..
+			SubDataProcess(m_nR , m_nC)	;
+		}
+		if(m_nR >= MAX_MEASURED_DATA -20) GetDlgItem(IDC_BTN_UP)->EnableWindow(FALSE);
+		GetDlgItem(IDC_BTN_DOWN)->EnableWindow(TRUE);
+		//
+		
+		strTemp = "Err(%)/Weight(mg)";
+		for(i = 0 ; i < 20 ; i++)
+		{
+			//		if(i==0) str="¿ÀÂ÷(%)/ÅäÃâ·®(mg)";
+			if(i==0)
+				str.Format("Data%d\n%s",i+1 + m_nR,strTemp);
+			else
+				str.Format("Data%d",i+1 + m_nR);				
+			m_ctrlMeasuredData.SetTextMatrix(i, 0 ,str);
+		}
+	}
+	else
+	{
+		if(m_nR < MAX_MEASURED_DATA -10) 
+		{
+			m_nR = m_nR + 10 ; // 20°³ÀÇ data¸¦ Ç¥Çö..
+			SubDataProcess(m_nR , m_nC)	;
+		}
+		if(m_nR >= MAX_MEASURED_DATA -10) GetDlgItem(IDC_BTN_UP)->EnableWindow(FALSE);
+		GetDlgItem(IDC_BTN_DOWN)->EnableWindow(TRUE);
+		//
+		strTemp = "Err(%) / Basic Weight(mg) / Total Weight(mg)";
+		for(i = 0 ; i < 10 ; i++)
+		{
+	//		if(i==0) str="¿ÀÂ÷(%)/ÅäÃâ·®(mg)";
+			if(i==0)
+				str.Format("Data%d\n%s",i+1 + m_nR,strTemp);
+			else
+				str.Format("Data%d",i+1 + m_nR);				
+			m_ctrlMeasuredData2.SetTextMatrix(i, 0 ,str);
+		}		
+	}
+}
+
+void CAdjust::OnBtnDown() 
+{
+	if(	ThreadStage.AdjustInitCode=='G')	return;
+
+	CString str=""; int i=0;
+	CString strTemp;
+	if(g_nMeasureDisplayType == 0)
+	{
+		if(m_nR > 0) 
+		{
+			m_nR = m_nR - 20 ; // 20°³ÀÇ data¸¦ Ç¥Çö..
+			SubDataProcess(m_nR , m_nC)	;
+		}
+		if(m_nR == 0) GetDlgItem(IDC_BTN_DOWN)->EnableWindow(FALSE);
+		GetDlgItem(IDC_BTN_UP)->EnableWindow(TRUE);
+		//
+		strTemp = "Err(%)/Weight(mg)";
+		for(i = 0 ; i < 20 ; i++)
+		{
+//			if(i==0 && m_nR==0) str="Error(%)/Weight(mg)";
+//			else str.Format("Data%d\n"Error(%)/Weight(mg)"",i+1 + m_nR);
+			if(i==0)
+				str.Format("Data%d\n%s",i+1 + m_nR,strTemp);
+			else
+				str.Format("Data%d",i+1 + m_nR);				
+			m_ctrlMeasuredData.SetTextMatrix(i, 0 ,str);
+		}
+	}
+	else
+	{
+		if(m_nR > 0) 
+		{
+			m_nR = m_nR - 10 ; // 20°³ÀÇ data¸¦ Ç¥Çö..
+			SubDataProcess(m_nR , m_nC)	;
+		}
+		if(m_nR == 0) GetDlgItem(IDC_BTN_DOWN)->EnableWindow(FALSE);
+		GetDlgItem(IDC_BTN_UP)->EnableWindow(TRUE);
+		//
+		strTemp = "Err(%) / Basic Weight(mg) / Total Weight(mg)";
+		for(i = 0 ; i < 10 ; i++)
+		{
+//			if(i==0 && m_nR==0) str="¿ÀÂ÷(%) / BasicÅäÃâ·®(mg) / TotalÅäÃâ·®(mg)";
+//			else str.Format("Data%d\n¿ÀÂ÷(%) / BasicÅäÃâ·®(mg) / TotalÅäÃâ·®(mg)",i+1 + m_nR);
+			if(i==0)
+				str.Format("Data%d\n%s",i+1 + m_nR,strTemp);
+			else
+				str.Format("Data%d",i+1 + m_nR);				
+			m_ctrlMeasuredData2.SetTextMatrix(i, 0 ,str);
+		}		
+	}
+}
+
+void CAdjust::OnBtnPumpInitial() 
+{
+	CMainFrame* pFrame = (CMainFrame*)AfxGetMainWnd();
+	CP8CA_LcDispView* pView = (CP8CA_LcDispView*)pFrame->GetActiveView();
+	
+	int iBackCode = ThreadStage.AdjustInitCode;
+	if(PC_TYPE == TRUE)	KillTimer(TIMER_ADJUST);
+	KillTimer(TIMER_ADJUST_MEASUREDISP);
+	KillTimer(TIMER_ADJUST_MSGDISP);
+	KillTimer(TIMER_BALANCE_MODEDISP);
+	KillTimer(TIMER_DROP_COUNT_DISP);
+
+	g_bInitilDisplay = FALSE;
+
+	//by shin//2009.08.25//MC °ü·Ã TAS Ãß°¡...//
+	//Adjustµ¿ÀÛ off
+	pView->WriteTasMCData(TAS_MC, 9, BIT_OFF);
+	Sleep(10);
+	pView->WriteTasMCData(TAS_MC, 10, BIT_OFF);
+	Sleep(10);
+	pView->WriteTasMCData(TAS_MC, 11, BIT_OFF);
+	Sleep(10);
+	pView->WriteTasMCData(TAS_MC, 12, BIT_OFF);
+	Sleep(10);
+
+	if(pView->m_nMachineStatus == 0)
+	{
+		pView->m_pMcStatus->KillTimer(0);
+		pView->m_pMcStatus->CloseWindow();
+	}
+	
+//
+	CAdjustInitial dlg;
+	dlg.DoModal();
+//
+	ThreadStage.AdjustInitCode = iBackCode;
+	if(PC_TYPE == TRUE)	SetTimer(TIMER_ADJUST,500,NULL);
+	SetTimer(TIMER_ADJUST_MEASUREDISP,300,NULL);
+	SetTimer(TIMER_ADJUST_MSGDISP,200,NULL);
+	SetTimer(TIMER_BALANCE_MODEDISP,500,NULL);
+
+	for(int i=0; i<MAX_NOZZLE/2 ;i++)
+	{
+		m_ctrlAdjustingCondition.SetRow(0);
+		m_ctrlAdjustingCondition.SetCol((MAX_NOZZLE/2+1) - (i+1));
+		
+		if(Drop_Info.manu_head_job[i+m_nC] == TRUE)
+			m_ctrlAdjustingCondition.SetCellBackColor(GREEN);
+		else
+			m_ctrlAdjustingCondition.SetCellBackColor(WHITEGRAY);
+	}
+
+	//by shin//2009.08.25//MC °ü·Ã TAS Ãß°¡...//
+	if(m_nTasJob == 1) //adjut
+	{
+		pView->WriteTasMCData(TAS_MC, 9, BIT_ON);
+		Sleep(200);
+	}
+	else if(m_nTasJob == 2) //measure
+	{
+		pView->WriteTasMCData(TAS_MC, 10, BIT_ON);
+		Sleep(200);
+	}
+	else if(m_nTasJob == 3) //Dummy Drop
+	{
+		pView->WriteTasMCData(TAS_MC, 11, BIT_ON);
+		Sleep(200);
+	}
+	else if(m_nTasJob == 4) //Drop Count Set
+	{
+		pView->WriteTasMCData(TAS_MC, 12, BIT_ON);
+		Sleep(200);
+	}
+	else
+	{
+//		pView->WriteTasMCData(TAS_MC, 9, BIT_OFF);
+//		Sleep(10);
+//		pView->WriteTasMCData(TAS_MC, 10, BIT_OFF);
+//		Sleep(10);
+//		pView->WriteTasMCData(TAS_MC, 11, BIT_OFF);
+//		Sleep(10);
+//		pView->WriteTasMCData(TAS_MC, 12, BIT_OFF);
+		Sleep(10);
+	}
+
+	if(pView->m_nMachineStatus == 0)
+	{
+		pView->m_pMcStatus = new CMcStatus();
+		pView->m_pMcStatus->Create(this);
+		pView->m_pMcStatus->ShowWindow(SW_SHOW);
+	}
+}
+
+void CAdjust::OnBtnSeqInitial() 
+{
+	CAdjustDraw dlg;
+	dlg.DoModal();
+}
+
+void CAdjust::OnInitialVolcalculate() 
+{
+
+}
+
+BEGIN_EVENTSINK_MAP(CAdjust, CDialog)
+    //{{AFX_EVENTSINK_MAP(CAdjust)
+	ON_EVENT(CAdjust, IDC_CMD_ADJUST, -600 /* Click */, OnClickCmdAdjust, VTS_NONE)
+	ON_EVENT(CAdjust, IDC_CMD_MEASURE, -600 /* Click */, OnClickCmdMeasure, VTS_NONE)
+	ON_EVENT(CAdjust, IDC_CMD_DUMMY_DROP, -600 /* Click */, OnClickCmdDummyDrop, VTS_NONE)
+	ON_EVENT(CAdjust, IDC_CMD_RETURN, -600 /* Click */, OnClickCmdReturn, VTS_NONE)
+	ON_EVENT(CAdjust, IDC_INITIAL_VOLCALIB, -600 /* Click */, OnClickInitialVolcalib, VTS_NONE)
+	ON_EVENT(CAdjust, IDC_MSFLEXGRID_VOLCALIB_RESULT, -600 /* Click */, OnClickMsflexgridVolcalibResult, VTS_NONE)
+	ON_EVENT(CAdjust, IDC_MSFLEXGRID_VOLCALIB_RESULT2, -600 /* Click */, OnClickMsflexgridVolcalibResult2, VTS_NONE)
+	ON_EVENT(CAdjust, IDC_BAL_MODE_SET, -600 /* Click */, OnClickBalModeSet, VTS_NONE)
+	ON_EVENT(CAdjust, IDC_DUMMY_CNT, -600 /* Click */, OnClickDummyCnt, VTS_NONE)
+	ON_EVENT(CAdjust, IDC_MSFLEXGRID_ADJUST, -601 /* DblClick */, OnDblClickMsflexgridAdjust, VTS_NONE)
+	ON_EVENT(CAdjust, IDC_CMD_DROP_COUNTING, -600 /* Click */, OnClickCmdDropCounting, VTS_NONE)
+	ON_EVENT(CAdjust, IDC_APD_REPORT, -600 /* Click */, OnClickApdReport, VTS_NONE)
+	ON_EVENT(CAdjust, IDC_ADJUST_ERROR, -600 /* Click */, OnClickAdjustError, VTS_NONE)
+	ON_EVENT(CAdjust, IDC_MEASURE_COUNT, -600 /* Click */, OnClickMeasureCount, VTS_NONE)
+	ON_EVENT(CAdjust, IDC_LABEL_RECIPE, -600 /* Click */, OnClickLabelRecipe, VTS_NONE)
+	ON_EVENT(CAdjust, IDC_BALANCE_CAL, -601 /* DblClick */, OnDblClickBalanceCal, VTS_DISPATCH)
+	ON_EVENT(CAdjust, IDC_DUMMY_CYCLE, -600 /* Click */, OnClickDummyCycle, VTS_NONE)
+	ON_EVENT(CAdjust, IDC_TARGET_MODE, -600 /* Click */, OnClickTargetMode, VTS_NONE)
+	ON_EVENT(CAdjust, IDC_TARGET_SET, -600 /* Click */, OnClickTargetSet, VTS_NONE)
+	ON_EVENT(CAdjust, IDC_CALIBRATION_APPLY, -601 /* DblClick */, OnDblClickCalibrationApply, VTS_DISPATCH)
+	ON_EVENT(CAdjust, IDC_CMD_TITLE, -600 /* Click */, OnClickCmdTitle, VTS_NONE)
+	ON_EVENT(CAdjust, IDC_INITIAL_ONOFF, -600 /* Click */, OnClickInitialOnoff, VTS_NONE)
+	ON_EVENT(CAdjust, IDC_N_OFFSET, -600 /* Click */, OnClickNOffset, VTS_NONE)
+	//}}AFX_EVENTSINK_MAP
+END_EVENTSINK_MAP()
+
+void CAdjust::OnClickInitialVolcalib() 
+{
+	CMainFrame* pFrame = (CMainFrame*)AfxGetMainWnd();
+	CP8CA_LcDispView* pView = (CP8CA_LcDispView*)pFrame->GetActiveView();
+
+	return;
+
+/*	m_nMeasureJob = 1;
+	ThreadStage.AdjustInitCode='G';
+	
+	m_ctrlVolCalib.SetBackColor(RED);
+	m_ctrlAdjust.SetBackColor(WHITEGRAY);
+	m_ctrlMeasure.SetBackColor(WHITEGRAY);
+	m_ctrlDummyDrop.SetBackColor(WHITEGRAY);*/
+}
+
+void CAdjust::OnClickCmdAdjust() 
+{
+	CMainFrame *pFrame = (CMainFrame *)AfxGetMainWnd();
+	CP8CA_LcDispView* pView = (CP8CA_LcDispView*)pFrame->GetActiveView();
+	CP8CA_LcDispDoc* pDoc = (CP8CA_LcDispDoc *)pFrame->GetActiveDocument();	
+//	g_nGlassCount=0;
+	int i,j;
+	int nTempRaw;
+#if _INTERLOCK
+/*	if ( pDoc->m_structDataEditor.m_nNzlMode == 1 && !g_bAceeptSettingStatus ) //141113 TRUE½Ã ÀÎÅÍ¶ô ÇØÀç
+	{
+		for(i=0;i<MAX_NOZZLE;i++)
+		{
+			if (Drop_Info.manu_head_job[i] ) 
+			{
+				if ( !N_Nozzle_Detect_Flag[i] )
+				{
+					if(pView->m_nLanguage == 0)
+					AfxMessageBox("±âÆ÷Á¦°Å »óÅÂ¸¦ È®ÀÎ ÇÏ¼¼¿ä.");
+					else if(pView->m_nLanguage == 1)
+					AfxMessageBox("Check Bubble Removal state."); 
+					else if(pView->m_nLanguage == 2)
+					AfxMessageBox("ôëü¬ìãËäð¶Ñ¨øÜîÜßÒ÷¾."); 
+
+					return; 
+				}
+			}
+		}
+	}*/
+#endif				
+	for(i = 0; i < MAX_NOZZLE; i++)
+	{
+		if(m_dAdjustError > pDoc->m_structAdjustCondition.dTargetError[i])
+		{
+			CNormalMsg dlg;
+			dlg.m_bTimer=FALSE;
+			
+			if (pView->m_nLanguage == 0)
+			{
+				dlg.m_strTitle = _T("È®ÀÎ");
+				dlg.m_strMsg1 = " Á¶Á¤ ¿ÀÂ÷°¡ ÃøÁ¤ ¿ÀÂ÷º¸´Ù Å©°Ô ¼³Á¤µÇ¾ú½À´Ï´Ù. ";
+				dlg.m_strMsg2 = " Á¶Á¤ ¿ÀÂ÷ Àç ¼³Á¤ ÈÄ ½ÃÀÛÇÏ¼¼¿ä...";
+			}
+
+			else if(pView->m_nLanguage == 1)
+			{
+				dlg.m_strTitle = _T("Check");
+				dlg.m_strMsg1 = "Adjust Error is Set more than Calibration Error. ";
+				dlg.m_strMsg2 = "Please restart. After it reset Adjust Error.";
+			}
+
+			else if(pView->m_nLanguage == 2)  //Áß±¹¾î
+			{
+				dlg.m_strTitle = _T("ü¬ìã");
+				dlg.m_strMsg1 = " àâöÇîÜðàïÚè¦ó¬ÓÞåÚö´Õáè¦ó¬. ";
+				dlg.m_strMsg2 = " ðàïÚè¦ó¬ñìãæàâöÇî¢ËÒã·...";
+			}
+
+			dlg.DoModal();
+			return;
+		}
+	}
+
+	g_bCountingFlag = FALSE;
+	m_nMeasureJob = 1;
+	if(pDoc->m_structDataEditor.m_nCalibrationMode == 0)
+	{
+		ThreadStage.AdjustInitCode=0;
+		
+		ThBal[BALID1].bAdjust = true;
+		ThBal[BALID2].bAdjust = true;
+		ThBal[BALID3].bAdjust = true;
+		ThBal[BALID4].bAdjust = true;
+		ThBal[BALID5].bAdjust = true;
+		ThBal[BALID6].bAdjust = true;
+		ThBal[BALID7].bAdjust = true;
+		ThBal[BALID8].bAdjust = true;
+		
+		for(i = 0; i < MAX_NOZZLE; i++)
+			g_nLoopCount[i] = pDoc->m_structAdjustCondition.nLoopCount[i];
+		
+		m_ctrlVolCalib.SetBackColor(WHITEGRAY);
+		m_ctrlAdjust.SetBackColor(YELLOW);
+		m_ctrlMeasure.SetBackColor(WHITEGRAY);
+		m_ctrlDummyDrop.SetBackColor(WHITEGRAY);
+		m_ctrlDropCount.SetBackColor(WHITEGRAY);
+		
+		//by shin//2009.08.25//MC °ü·Ã TAS Ãß°¡...//
+		//Adjustment
+		m_nTasJob = 1;
+	}
+	else if(pDoc->m_structDataEditor.m_nCalibrationMode == 1)
+	{
+		ThreadStage.AdjustInitCode='G';
+		m_ctrlVolCalib.SetBackColor(WHITEGRAY);
+		m_ctrlAdjust.SetBackColor(GREEN);
+		m_ctrlMeasure.SetBackColor(WHITEGRAY);
+		m_ctrlDummyDrop.SetBackColor(WHITEGRAY);
+		m_ctrlDropCount.SetBackColor(WHITEGRAY);
+
+		m_ctrlVolCalibResult1.SetRows(MAX_MEADATA_GETCOUNT1+1);
+		m_ctrlVolCalibResult1.SetCols(MAX_NOZZLE/2+2);
+		
+		for (i = 0 ; i< MAX_NOZZLE/2; i++) 
+		{
+			for(j=0 ; j<MAX_MEADATA_GETCOUNT1; j++) 
+			{
+				m_ctrlVolCalibResult1.SetRow(j+1);
+				if(pDoc->m_structDataEditor.m_nCalibrationMode == 1)
+					m_ctrlVolCalibResult1.SetCol(i+2);
+				else
+					m_ctrlVolCalibResult1.SetCol(i+1);
+				m_ctrlVolCalibResult1.SetBackColor(WHITE);
+			}
+		}
+		pView->m_bMesuredDataDisplayEnable = TRUE;
+	}
+	else if(pDoc->m_structDataEditor.m_nCalibrationMode == 2 || pDoc->m_structDataEditor.m_nCalibrationMode == 3)
+	{
+		ThreadStage.AdjustInitCode='G';
+		m_ctrlVolCalib.SetBackColor(WHITEGRAY);
+		m_ctrlAdjust.SetBackColor(BLUE);
+		m_ctrlMeasure.SetBackColor(WHITEGRAY);
+		m_ctrlDummyDrop.SetBackColor(WHITEGRAY);
+		m_ctrlDropCount.SetBackColor(WHITEGRAY);
+
+		if(pDoc->m_structDataEditor.m_nCalibrationMode == 2)
+			nTempRaw = pDoc->m_structDataEditor.m_nFlexCalibrationMaxBlockNum;
+		else if(pDoc->m_structDataEditor.m_nCalibrationMode == 3)
+			nTempRaw = 1;
+
+		m_ctrlVolCalibResult1.SetRows(nTempRaw);
+		m_ctrlVolCalibResult1.SetCols(MAX_NOZZLE/2+1);
+		for (i = 0 ; i< MAX_NOZZLE/2; i++) 
+		{
+			for(j=0 ; j<nTempRaw; j++) 
+			{
+				m_ctrlVolCalibResult1.SetRow(j);
+				m_ctrlVolCalibResult1.SetCol(i+1);
+				m_ctrlVolCalibResult1.SetBackColor(WHITE);
+			}
+		}
+		pView->m_bMesuredDataDisplayEnable = TRUE;
+	}
+	else if(pDoc->m_structDataEditor.m_nCalibrationMode == 4 || pDoc->m_structDataEditor.m_nCalibrationMode == 5)//2015.01.24 by tskim Section Calibration
+	{
+		ThreadStage.AdjustInitCode='G';
+		m_ctrlVolCalib.SetBackColor(WHITEGRAY);
+		m_ctrlAdjust.SetBackColor(BLUE);
+		m_ctrlMeasure.SetBackColor(WHITEGRAY);
+		m_ctrlDummyDrop.SetBackColor(WHITEGRAY);
+		m_ctrlDropCount.SetBackColor(WHITEGRAY);
+
+		if(pDoc->m_structDataEditor.m_nCalibrationMode == 4)
+			nTempRaw = pDoc->m_structDataEditor.m_nMaxLineDropBlockNum;
+		else if(pDoc->m_structDataEditor.m_nCalibrationMode == 5)
+			nTempRaw = 1;
+
+		m_ctrlVolCalibResult1.SetRows(nTempRaw);
+		m_ctrlVolCalibResult1.SetCols(MAX_NOZZLE/2+1);
+		for (i = 0 ; i< MAX_NOZZLE/2; i++) 
+		{
+			for(j=0 ; j<nTempRaw; j++) 
+			{
+				m_ctrlVolCalibResult1.SetRow(j);
+				m_ctrlVolCalibResult1.SetCol(i+1);
+				m_ctrlVolCalibResult1.SetBackColor(WHITE);
+			}
+		}
+		pView->m_bMesuredDataDisplayEnable = TRUE;
+	}
+
+
+	pView->WriteTasMCData(TAS_MC, 10, BIT_OFF);
+	Sleep(10);
+	pView->WriteTasMCData(TAS_MC, 11, BIT_OFF);
+	Sleep(10);
+	pView->WriteTasMCData(TAS_MC, 12, BIT_OFF);
+	Sleep(10);
+
+	pView->WriteTasMCData(TAS_MC, 9, BIT_ON);
+	Sleep(200);
+
+	KillTimer(TIMER_DROP_COUNT_DISP);
+
+//2011.04.27 by tskim
+	for(i=0;i<MAX_BAL;i++)
+	{
+		Balstate.bBalNormalState[i] = TRUE;
+		ThBal[i].nBalanceMode = 0;
+	}
+}
+
+void CAdjust::OnClickCmdMeasure() 
+{
+	CMainFrame* pFrame = (CMainFrame*)AfxGetMainWnd();
+	CP8CA_LcDispView* pView = (CP8CA_LcDispView*)pFrame->GetActiveView();
+	CP8CA_LcDispDoc* pDoc = (CP8CA_LcDispDoc *)pFrame->GetActiveDocument();
+
+#if EQ
+/*	if ( pDoc->m_structDataEditor.m_nNzlMode == 1 && !g_bAceeptSettingStatus) //141113 TRUE½Ã ÀÎÅÍ¶ô ÇØÀç
+	{
+		for(int i=0;i<MAX_NOZZLE;i++)
+		{
+			if ( Drop_Info.manu_head_job[i]  ) 
+			{
+				if ( !N_Nozzle_Detect_Flag[i] )
+				{
+					if(pView->m_nLanguage == 0)
+					AfxMessageBox("±âÆ÷Á¦°Å »óÅÂ¸¦ È®ÀÎ ÇÏ¼¼¿ä.");
+					else if(pView->m_nLanguage == 1)
+					AfxMessageBox("Check Bubble Removal state."); 
+					else if(pView->m_nLanguage == 2)
+					AfxMessageBox("ôëü¬ìãËäð¶Ñ¨øÜîÜßÒ÷¾."); 
+					return;
+				}
+			}
+		}
+	}
+*/
+//140409
+//	if ( !g_bAceeptSettingStatus ) //141113 TRUE½Ã ÀÎÅÍ¶ô ÇØÀç
+	{
+		if(pDoc->m_structDataEditor.m_nCalibrationMode == 1 || pDoc->m_structDataEditor.m_nCalibrationMode ==2)
+		{
+			if(!g_bCalibrationApply)
+			{
+				if(pView->m_nLanguage == 0)
+				AfxMessageBox("Calibration °è»êÄ¡ Àû¿ëÀ» ´©¸£¼¼¿ä!!");//Msg ÇÊ¿ä 
+				else if(pView->m_nLanguage == 1)
+				AfxMessageBox(" Push 'Calibration Calculating Apply' !!");//Msg ÇÊ¿ä 
+				else if(pView->m_nLanguage == 2)
+				AfxMessageBox("ôëïÇÌªCalibrationÍªß©ö·ëëéÄäÎÒï?");//Msg ÇÊ¿ä 
+
+				return;
+			}
+			//120419
+			for(int nCount=0; nCount < MAX_NOZZLE; nCount++)
+			{
+				if(!g_bCalibrationStatus[nCount] && pDoc->m_bIsHeadSelected[nCount])
+				{
+					if(pView->m_nLanguage == 0)
+					AfxMessageBox("±³Á¤°ªÀ» È®ÀÎ ÇÏ½Ã°í ´Ù½Ã ½ÇÇàÇÏ¼¼¿ä.");
+
+					else if(pView->m_nLanguage == 1)
+					AfxMessageBox("Check Calibration Value and Retry it.");
+
+					else if(pView->m_nLanguage == 2)
+					AfxMessageBox("ü¬ìãÎèïáö·î¢òûú¼."); 
+					
+					return; 
+				}
+			}
+		}
+	}
+#endif
+	
+	//	g_nGlassCount=0; // JHC : 2004. 8. 7
+	g_bCountingFlag = FALSE;
+	m_nMeasureJob = 1;
+	ThreadStage.AdjustInitCode=0;
+
+	ThBal[BALID1].bAdjust = false;
+	ThBal[BALID2].bAdjust = false;
+	ThBal[BALID3].bAdjust = false;
+	ThBal[BALID4].bAdjust = false;
+	ThBal[BALID5].bAdjust = false;
+	ThBal[BALID6].bAdjust = false;
+	ThBal[BALID7].bAdjust = false;
+	ThBal[BALID8].bAdjust = false;
+
+	for(int i = 0; i < MAX_NOZZLE; i++)
+		g_nLoopCount[i] = g_nManuMeasureLoopCount;
+	
+	m_ctrlVolCalib.SetBackColor(WHITEGRAY);
+	m_ctrlAdjust.SetBackColor(WHITEGRAY);
+	m_ctrlMeasure.SetBackColor(YELLOW);
+	m_ctrlDummyDrop.SetBackColor(WHITEGRAY);
+	m_ctrlDropCount.SetBackColor(WHITEGRAY);	
+
+	//by shin//2009.08.25//MC °ü·Ã TAS Ãß°¡...//
+	//measurement
+	m_nTasJob = 2;
+	pView->WriteTasMCData(TAS_MC, 9, BIT_OFF);
+	Sleep(10);
+	pView->WriteTasMCData(TAS_MC, 11, BIT_OFF);
+	Sleep(10);
+	pView->WriteTasMCData(TAS_MC, 12, BIT_OFF);
+	Sleep(10);
+
+	pView->WriteTasMCData(TAS_MC, 10, BIT_ON);
+	Sleep(200);
+
+	KillTimer(TIMER_DROP_COUNT_DISP);
+
+//2011.04.27 by tskim
+	for(i=0;i<MAX_BAL;i++)
+	{
+		Balstate.bBalNormalState[i] = TRUE;
+		ThBal[i].nBalanceMode = 0;
+	}
+}
+
+void CAdjust::OnClickCmdDummyDrop() 
+{
+	CMainFrame* pFrame = (CMainFrame*)AfxGetMainWnd();
+	CP8CA_LcDispView* pView = (CP8CA_LcDispView*)pFrame->GetActiveView();
+	CP8CA_LcDispDoc* pDoc = (CP8CA_LcDispDoc *)pFrame->GetActiveDocument();
+
+	if ( pDoc->m_structDataEditor.m_nNzlMode == 1)
+	{
+		for(int i=0;i<MAX_NOZZLE;i++)
+		{
+			if (Drop_Info.manu_head_job[i])
+			{
+				if ( !N_Nozzle_Detect_Flag[i] )
+				{
+					if(pView->m_nLanguage == 0)
+					AfxMessageBox("±âÆ÷Á¦°Å »óÅÂ¸¦ È®ÀÎ ÇÏ¼¼¿ä.");
+					else if(pView->m_nLanguage == 1)
+					AfxMessageBox("Check Bubble Removal state."); 
+					else if(pView->m_nLanguage == 2)
+					AfxMessageBox("ôëü¬ìãËäð¶Ñ¨øÜîÜßÒ÷¾."); 
+					return; 
+				}
+			}
+		}
+	}	
+
+	m_nMeasureJob = 3;
+	g_bCountingFlag = FALSE;
+	//
+	m_ctrlVolCalib.SetBackColor(WHITEGRAY);
+	m_ctrlAdjust.SetBackColor(WHITEGRAY);
+	m_ctrlMeasure.SetBackColor(WHITEGRAY);
+	m_ctrlDropCount.SetBackColor(WHITEGRAY);	
+	m_ctrlDummyDrop.SetBackColor(YELLOW);	
+
+	//by shin//2009.08.25//MC °ü·Ã TAS Ãß°¡...//
+	//Dummy Drop
+	m_nTasJob = 3;
+	pView->WriteTasMCData(TAS_MC, 9, BIT_OFF);
+	Sleep(10);
+	pView->WriteTasMCData(TAS_MC, 10, BIT_OFF);
+	Sleep(10);
+	pView->WriteTasMCData(TAS_MC, 12, BIT_OFF);
+	Sleep(10);
+
+	pView->WriteTasMCData(TAS_MC, 11, BIT_ON);
+	Sleep(200);
+	
+	SetTimer(TIMER_DROP_COUNT_DISP,500,NULL);
+}
+
+
+void CAdjust::OnClickCmdReturn() 
+{
+	// TODO: Add your control notification handler code here
+	CMainFrame* pFrame = (CMainFrame*)AfxGetMainWnd();
+	CP8CA_LcDispView* pView = (CP8CA_LcDispView*)pFrame->GetActiveView();
+//	CP8CA_LcDispDoc* pDoc = (CP8CA_LcDispDoc *)pFrame->GetActiveDocument();
+//
+	if(PC_TYPE == TRUE) 
+	{
+		KillTimer(TIMER_ADJUST);
+		pView->m_pDevice->Start_button_onoff(false);
+		pView->m_pDevice->Stop_button_onoff(false);
+	}
+
+	KillTimer(TIMER_ADJUST_MEASUREDISP);
+	KillTimer(TIMER_ADJUST_MSGDISP);
+	KillTimer(TIMER_BALANCE_MODEDISP);
+	KillTimer(TIMER_DROP_COUNT_DISP);
+//
+	ThreadStage.ExitFlag= true;
+	ThreadStage.bUseInterLock=true;
+//
+	ThBal[BALID1].bAdjust = false;
+	ThBal[BALID2].bAdjust = false;
+	ThBal[BALID3].bAdjust = false;
+	ThBal[BALID4].bAdjust = false;
+	ThBal[BALID5].bAdjust = false;
+	ThBal[BALID6].bAdjust = false;
+	ThBal[BALID7].bAdjust = false;
+	ThBal[BALID8].bAdjust = false;
+	
+	ThreadStage.AdjustInitCode=0;
+	g_ManualApdReport = FALSE;
+
+	//by shin//2009.08.25//MC °ü·Ã TAS Ãß°¡...//
+	//Adjustµ¿ÀÛ off
+	pView->WriteTasMCData(TAS_MC, 9, BIT_OFF);
+	Sleep(10);
+	pView->WriteTasMCData(TAS_MC, 10, BIT_OFF);
+	Sleep(10);
+	pView->WriteTasMCData(TAS_MC, 11, BIT_OFF);
+	Sleep(10);
+	pView->WriteTasMCData(TAS_MC, 12, BIT_OFF);
+	Sleep(10);
+
+	if(pView->m_nMachineStatus == 0)
+	{
+		pView->m_pMcStatus->KillTimer(0);
+		pView->m_pMcStatus->CloseWindow();
+	}
+	g_bMultiTargetMeas = FALSE;
+	g_bInitialShot = TRUE;
+	EndDialog(IDOK);
+	
+}
+
+void CAdjust::OnTimer(UINT nIDEvent) 
+{
+	// TODO: Add your message handler code here and/or call default
+//
+	CMainFrame* pFrame = (CMainFrame*)AfxGetMainWnd();
+	CP8CA_LcDispView* pView = (CP8CA_LcDispView*)pFrame->GetActiveView();
+	CP8CA_LcDispDoc* pDoc = (CP8CA_LcDispDoc *)pFrame->GetActiveDocument();
+
+	switch(nIDEvent)
+	{
+	case TIMER_ADJUST: 
+		if(m_nMeasureJob==1) // adjust check timer func
+		{ 
+			SubTimerAdjustFunc();
+			m_ctrlMessageDummyDrop.SetWindowPos( NULL,29,300,0,0, SWP_NOMOVE | SWP_SHOWWINDOW | SWP_NOZORDER );
+
+			if(ThreadStage.AdjustInitCode=='G')
+			{ 
+				m_ctrlVolCalibResult1.ShowWindow(SW_SHOW);
+				m_ctrlVolCalibResult2.ShowWindow(SW_HIDE);
+				if(g_nMeasureDisplayType == 0)
+					m_ctrlMeasuredData.ShowWindow(SW_HIDE); 
+				else
+					m_ctrlMeasuredData2.ShowWindow(SW_HIDE); 				
+				GetDlgItem(IDC_INITIAL_VOLCALCULATE)->ShowWindow(SW_SHOW);
+			}
+			else
+			{
+				m_ctrlVolCalibResult1.ShowWindow(SW_HIDE); 
+				m_ctrlVolCalibResult2.ShowWindow(SW_HIDE);
+				if(g_nMeasureDisplayType == 0)
+					m_ctrlMeasuredData.ShowWindow(SW_SHOW);
+				else
+					m_ctrlMeasuredData2.ShowWindow(SW_SHOW);
+				GetDlgItem(IDC_INITIAL_VOLCALCULATE)->ShowWindow(SW_HIDE);
+				
+			}
+		}
+		else if(m_nMeasureJob==2) // columnÀÌµ¿, Head ÃøÁ¤Àü À§Ä¡ ÀÌµ¿ check timer
+		{ 
+			SubTimerInitialMoveFunc(); 
+			if(g_nMeasureDisplayType == 0)
+				m_ctrlMeasuredData.ShowWindow(SW_HIDE);
+			else
+				m_ctrlMeasuredData2.ShowWindow(SW_HIDE);			
+			m_ctrlVolCalibResult1.ShowWindow(SW_HIDE);
+			m_ctrlVolCalibResult2.ShowWindow(SW_HIDE);
+			m_ctrlMessageDummyDrop.SetWindowPos( NULL,29,300,779,144, SWP_NOMOVE | SWP_SHOWWINDOW | SWP_NOZORDER );
+		}
+		else if(m_nMeasureJob==3) // dumy drop check timer
+		{ 
+			SubTimerDummyDropFunc(); 
+			if(g_nMeasureDisplayType == 0)
+				m_ctrlMeasuredData.ShowWindow(SW_HIDE);
+			else
+				m_ctrlMeasuredData2.ShowWindow(SW_HIDE);
+
+			m_ctrlVolCalibResult1.ShowWindow(SW_HIDE);
+			m_ctrlVolCalibResult2.ShowWindow(SW_HIDE);
+			m_ctrlMessageDummyDrop.SetWindowPos( NULL,29,300,779,144, SWP_NOMOVE | SWP_SHOWWINDOW | SWP_NOZORDER );
+			GetDlgItem(IDC_INITIAL_VOLCALCULATE)->ShowWindow(SW_HIDE);
+		}
+		else
+		{			
+			UpdateData(false);
+			m_ctrlAdjustingCondition.ShowWindow(SW_SHOW);
+			m_ctrlMessageDummyDrop.SetWindowPos( NULL,50,100,0,0, SWP_NOMOVE | SWP_SHOWWINDOW | SWP_NOZORDER );
+		}
+		break;
+
+	case TIMER_ADJUST_MEASUREDISP:
+		SubTimerAdjustMeasurdDataDispFunc();
+		break;
+	case TIMER_ADJUST_MSGDISP:
+		SubTimerAdjustMsgDispFunc();
+		break;
+	case TIMER_BALANCE_MODEDISP:
+		SubTimerBalanceModeDispFunc();
+		break;
+	case TIMER_DROP_COUNT_DISP:
+		if(ThreadStage.AdjustInitCode!='G')
+		{
+			SubTimerDropCountDisp();
+		}
+		break;
+	default:
+		AfxMessageBox("µð¹ö±×code¸¦ ³Ö¾î¿ä?");
+		break;
+	}// end of switch(nIDEvent)
+
+//
+	CDialog::OnTimer(nIDEvent);
+}
+//
+void CAdjust::SubTimerAdjustFunc()
+{
+	CMainFrame* pFrame = (CMainFrame*)AfxGetMainWnd();
+	CP8CA_LcDispView* pView = (CP8CA_LcDispView*)pFrame->GetActiveView();
+	CP8CA_LcDispDoc* pDoc = (CP8CA_LcDispDoc *)pFrame->GetActiveDocument();
+
+	DWORD dwIOResultF=0;
+	BOOL bIOResult=FALSE, bMiniDoorSafetyOK=FALSE;
+	
+	m_nTimerCount++;
+//
+	m_bRun = false;
+	m_bRun = ThBal[BALID1].bRunning | ThBal[BALID2].bRunning | ThBal[BALID3].bRunning | ThBal[BALID4].bRunning | ThBal[BALID5].bRunning | ThBal[BALID6].bRunning
+		     | ThBal[BALID7].bRunning | ThBal[BALID8].bRunning;
+	
+//
+//	m_bRun = false;
+	if(m_bRun == TRUE)
+	{
+		FAS_GetIo(1,false,&dwIOResultF);
+
+		FAS_GetIoBit(1,false,ROBOT_ARM_DETECT,&bIOResult);	// Robot Arm Check
+
+		if(pView->m_pDevice->SST_Check(STOP_SWITCH))
+		{
+			Sleep(100);
+			int iIoCount=0;
+			for(int i=0; i<50 ;i++)  	
+			   if(pView->m_pDevice->SST_Check(STOP_SWITCH)) iIoCount++;	// ÇÔ¼ö ³»ºÎ¿¡¼­ STOP SWÀÇ 1,2°¡ ´­·ÁÁ³´ÂÁö ¸ðµÎ È®ÀÎÇÑ´Ù.
+			//////////////////////////////////////////////
+			if(iIoCount > 10) 
+			{
+				if(ThreadStage.AdjustInitCode == 'G')
+				{
+					for(int nCount=0; nCount < MAX_NOZZLE ; nCount++ )
+					{
+						if(Drop_Info.manu_head_job[nCount])  
+							g_bCalibrationStatus[nCount] = FALSE; //120419 by shlee
+					}
+				}
+
+				m_bSWCheck = false;//2010.01.19
+				//AfxMessageBox("stop¹öÆ° ´­¸²");
+/*				for(int ibd = 1 ; ibd <= 4 ; ibd++) 
+					for(int iaxis = 0 ; iaxis < 16 ; iaxis++) 
+						FAS_MoveStop(ibd,iaxis,0);							 // all axis stop..
+*/
+				//axis stop..
+				FAS_MoveStop(1,0,0);	//S0
+				FAS_MoveStop(1,1,0);	//K0
+				FAS_MoveStop(2,0,0);	//K1
+				FAS_MoveStop(2,1,0);	//K2
+
+				for(int iaxis = 4; iaxis < 16; iaxis++)
+				{
+					FAS_MoveStop(2,iaxis,0);	//S1~S12				
+				}
+
+				for(iaxis = 0; iaxis < 4; iaxis++)
+				{
+					FAS_MoveStop(3,iaxis,0);	//S13~S16				
+				}
+				
+				ThBal[BALID1].ExitFlag = true;		ThBal[BALID2].ExitFlag = true;
+				ThBal[BALID3].ExitFlag = true;		ThBal[BALID4].ExitFlag = true;
+				ThBal[BALID5].ExitFlag = true;		ThBal[BALID6].ExitFlag = true;
+				ThBal[BALID7].ExitFlag = true;		ThBal[BALID8].ExitFlag = true;
+
+				g_bMessageDisplay = TRUE;
+			}
+			/////////////////////////////////////////////
+		}
+		// ÇöÀç Run »óÅÂ¿¡¼­ Start ¹öÆ°À» On ½ÃÄÑ ³õ´Â´Ù.
+		pView->m_pDevice->Start_button_onoff(true);
+		pView->m_pDevice->Stop_button_onoff(false);
+		m_nTimerCount = 0;
+		//
+		m_ctrlVolCalib.EnableWindow(false);
+		m_ctrlAdjust.EnableWindow(false);
+		m_ctrlMeasure.EnableWindow(false);
+		m_ctrlDummyDrop.EnableWindow(false);
+		m_ctrlDropCount.EnableWindow(false);	
+		m_ctrlPumpInitial.EnableWindow(false);
+		m_ctrlVolCalculate.EnableWindow(false);
+		m_ctrlReturn.EnableWindow(false);
+		m_ctrlBalModeSet.EnableWindow(false);
+//2014.11.27 by tskim
+		m_ctrlNOffset.EnableWindow(false);
+		m_ctrlCalibApply.EnableWindow(false);
+		m_ctrlTargetMode.EnableWindow(false);
+		//
+		if(ThBal[BALID1].nTimerCount > -1) ThBal[BALID1].nTimerCount++; // ThreadBal1
+		if(ThBal[BALID2].nTimerCount > -1) ThBal[BALID2].nTimerCount++; // ThreadBal2
+		if(ThBal[BALID3].nTimerCount > -1) ThBal[BALID3].nTimerCount++; // ThreadBal3
+		if(ThBal[BALID4].nTimerCount > -1) ThBal[BALID4].nTimerCount++; // ThreadBal4
+		if(ThBal[BALID5].nTimerCount > -1) ThBal[BALID5].nTimerCount++; // ThreadBal5
+		if(ThBal[BALID6].nTimerCount > -1) ThBal[BALID6].nTimerCount++; // ThreadBal6
+		if(ThBal[BALID7].nTimerCount > -1) ThBal[BALID7].nTimerCount++; // ThreadBal7
+		if(ThBal[BALID8].nTimerCount > -1) ThBal[BALID8].nTimerCount++; // ThreadBal8
+
+		if(ThBal[BALID1].MeasuringTimeCount > -1) ThBal[BALID1].MeasuringTimeCount++; // ThreadBal1
+		if(ThBal[BALID2].MeasuringTimeCount > -1) ThBal[BALID2].MeasuringTimeCount++; // ThreadBal2
+		if(ThBal[BALID3].MeasuringTimeCount > -1) ThBal[BALID3].MeasuringTimeCount++; // ThreadBal3
+		if(ThBal[BALID4].MeasuringTimeCount > -1) ThBal[BALID4].MeasuringTimeCount++; // ThreadBal4
+		if(ThBal[BALID5].MeasuringTimeCount > -1) ThBal[BALID5].MeasuringTimeCount++; // ThreadBal5
+		if(ThBal[BALID6].MeasuringTimeCount > -1) ThBal[BALID6].MeasuringTimeCount++; // ThreadBal6
+		if(ThBal[BALID7].MeasuringTimeCount > -1) ThBal[BALID7].MeasuringTimeCount++; // ThreadBal7
+		if(ThBal[BALID8].MeasuringTimeCount > -1) ThBal[BALID8].MeasuringTimeCount++; // ThreadBal8
+	
+	}
+	else // bRun==FALSE
+	{
+		if(pView->m_pDevice->SST_Check(START_SWITCH))
+		{
+//////////////////////////////////////////////////20181130 jeongyong - KEY »óÅÂ Ã¼Å©
+#if AUTOKEY_INTERLOCK
+			int nAutoKey = 0;
+			FAS_GetIoBit(2,TRUE,AUTO_MODE,&nAutoKey);
+			if(nAutoKey != TRUE)
+			{
+				AfxMessageBox("Change Key (Manual -> Auto)!!"); 
+				Sleep(1000);
+				return;
+			}
+#endif
+
+			if(pView->m_nLanguage == 0)
+			ThreadStage.strMsg1="±¸µ¿À» ½ÃÀÛÇÏ·Á¸é START ¹öÆ°À» ´©¸£¼¼¿ä..";
+			else if(pView->m_nLanguage == 1)
+			ThreadStage.strMsg1="Push START Button, If you want to start..";
+			else if(pView->m_nLanguage == 2)
+			ThreadStage.strMsg1="åýé©ÏÌÔÑôëäÎSTARTäÎ?..";
+			
+			
+			ThreadStage.ManualJobStep = 0; 
+			m_nMeasureJob=2;
+
+			for(int nCount = 0; nCount < MAX_NOZZLE; nCount++ )
+			{
+				if(Drop_Info.manu_head_job[nCount] == TRUE) //20190710 JEONGYONG - ¼±ÅÃµÈ Çìµå¸¸ Ä¶¸®ºê·¹ÀÌ¼Ç »óÅÂ TRUE ½ÃÅ´.
+				{
+					g_bCalibrationStatus[nCount] = TRUE; 				
+				}
+			}
+		}
+		// Stop »óÅÂ¿¡¼­ 
+		// Stop ¹öÆ°ÀÌ OnµÇµµ·Ï ÇÑ´Ù.
+		pView->m_pDevice->Stop_button_onoff(true);
+		// Start ¹öÆ°Àº ±ô¹Ú°Å¸®°Ô ÇÑ´Ù.
+		if(m_nTimerCount==2) pView->m_pDevice->Start_button_onoff(true);
+		else if(m_nTimerCount>=4) 
+		{
+			pView->m_pDevice->Start_button_onoff(false);
+			m_nTimerCount = 0;
+		}
+		//
+		m_ctrlVolCalib.EnableWindow(true);
+		m_ctrlAdjust.EnableWindow(true);
+		m_ctrlMeasure.EnableWindow(true);
+		m_ctrlDummyDrop.EnableWindow(true);
+		if(pDoc->m_structDataEditor.m_nNzlMode != 1)
+			m_ctrlDropCount.EnableWindow(true);	
+		m_ctrlPumpInitial.EnableWindow(true);
+		m_ctrlVolCalculate.EnableWindow(true);
+		m_ctrlReturn.EnableWindow(true);
+		m_ctrlBalModeSet.EnableWindow(true);
+//2014.11.27 by tskim
+		m_ctrlNOffset.EnableWindow(true);
+		m_ctrlCalibApply.EnableWindow(true);
+		m_ctrlTargetMode.EnableWindow(true);
+
+		// timer
+		ThBal[BALID1].nTimerCount = 0;	ThBal[BALID2].nTimerCount = 0;
+		ThBal[BALID3].nTimerCount = 0;	ThBal[BALID4].nTimerCount = 0;
+		ThBal[BALID5].nTimerCount = 0;	ThBal[BALID6].nTimerCount = 0;
+		ThBal[BALID7].nTimerCount = 0; ThBal[BALID8].nTimerCount = 0;
+//2010.03.07 by tskim Measuring time
+		ThBal[BALID1].MeasuringTimeCount = 0;	ThBal[BALID2].MeasuringTimeCount = 0;
+		ThBal[BALID3].MeasuringTimeCount = 0;	ThBal[BALID4].MeasuringTimeCount = 0;
+		ThBal[BALID5].MeasuringTimeCount = 0;	ThBal[BALID6].MeasuringTimeCount = 0;
+		ThBal[BALID7].MeasuringTimeCount = 0;   ThBal[BALID8].MeasuringTimeCount = 0;
+	}
+}
+
+void CAdjust::SubTimerInitialMoveFunc()
+{
+	//
+	CMainFrame* pFrame = (CMainFrame*)AfxGetMainWnd();
+	CP8CA_LcDispView* pView = (CP8CA_LcDispView*)pFrame->GetActiveView();
+	CP8CA_LcDispDoc* pDoc = (CP8CA_LcDispDoc *)pFrame->GetActiveDocument();
+	CDevicePart *m_pDevice;		//ehji 141106 ¸ÎÈû°¨Áö check Log
+
+	WORD wTempIO = 0 , wIOResult=0, wIOResult1=0;
+	BOOL bIOResult=false, bMiniDoorSafetyOK=FALSE;
+	DWORD dwIOResultF=0;
+	int i=0,j=0;
+	CString strLog;	//ehji 141106 ¸ÎÈû°¨Áö check Log
+//
+	m_nTimerCount++;
+
+	if(g_bMessageDisplay == TRUE)
+	{
+		m_ctrlMessageDummyDrop.SetCaption( ThreadStage.strMsg1 );
+	}
+
+	/////////////////////////////////////////////
+	if(ThreadStage.bMachineRunning == TRUE)
+	{
+		if(g_bMessageDisplay == FALSE)
+		{
+			m_nMeasureJob=1;
+		}
+        else
+		{
+			m_nMeasureJob=2;
+		}
+		//
+		FAS_GetIo(1,false,&dwIOResultF);
+//2008.01.25 By tskim
+		FAS_GetIoBit(1,false,ROBOT_ARM_DETECT,&bIOResult);	// Robot Arm Check
+		
+		if(pView->m_pDevice->SST_Check(STOP_SWITCH)) 
+		{
+			m_bSWCheck = false;//2010.01.19
+			//axis stop..
+			FAS_MoveStop(1,0,0);	//S0
+			FAS_MoveStop(1,1,0);	//K0
+			FAS_MoveStop(2,0,0);	//K1
+			FAS_MoveStop(2,1,0);	//K2
+
+			for(int iaxis = 4; iaxis < 16; iaxis++)
+			{
+				FAS_MoveStop(2,iaxis,0);	//S1~S12				
+			}
+
+			for(iaxis = 0; iaxis < 4; iaxis++)
+			{
+				FAS_MoveStop(3,iaxis,0);	//S13~S16				
+			}
+
+			ThreadStage.ExitFlag = true;				// ** exit **
+			g_bMessageDisplay = TRUE;
+		}
+		// ÇöÀç Run »óÅÂ¿¡¼­ Start ¹öÆ°À» On ½ÃÄÑ ³õ´Â´Ù.
+		pView->m_pDevice->Start_button_onoff(true);
+		pView->m_pDevice->Stop_button_onoff(false);
+		m_nTimerCount = 0;
+		//
+		m_ctrlVolCalib.EnableWindow(false);
+		m_ctrlAdjust.EnableWindow(false);
+		m_ctrlMeasure.EnableWindow(false);
+		m_ctrlDummyDrop.EnableWindow(false);
+		m_ctrlDropCount.EnableWindow(false);	
+		m_ctrlPumpInitial.EnableWindow(false);
+		m_ctrlVolCalculate.EnableWindow(false);
+		m_ctrlReturn.EnableWindow(false);
+		m_ctrlBalModeSet.EnableWindow(false);
+//2014.11.27 by tskim
+		m_ctrlNOffset.EnableWindow(false);
+		m_ctrlCalibApply.EnableWindow(false);
+		m_ctrlTargetMode.EnableWindow(false);
+	}
+	else // ThreadStage.bMachineRunning == FALSE
+	{
+		//Initial Move
+		if(ThreadStage.ManualJobStep > 0) m_nMeasureJob=1;
+		//
+		if(pView->m_pDevice->SST_Check(START_SWITCH)) 
+		{	
+			m_bSWCheck = false;//2010.01.19
+			DWORD wIOResultF = 0, wIOResultR = 0;
+			BOOL bIOResult=FALSE;
+			FAS_GetIo(1,false,&wIOResultF); FAS_GetIo(1,false,&wIOResultR);
+//2008.01.28 By tskim
+			FAS_GetIoBit(1,false,ROBOT_ARM_DETECT,&bIOResult);	// Robot Arm Check
+
+			// LC ÃÖ¼Ò·® °¨Áö ¼¾¼­ Check
+				wIOResult = 0x0000;	wIOResult1=0x0000;
+				for(i=0; i<MAX_NOZZLE ;i++){
+					if(Drop_Info.manu_head_job[i] == TRUE)
+					{
+						FAS_GetIoBit(1,true,LC_LIMIT1+i,&bIOResult);			
+						if((!bIOResult) && (pDoc->m_bRemainSensorUSE[i]==TRUE))
+						{
+							wTempIO=0x0001;
+							wTempIO=wTempIO<<i;
+							wIOResult+=wTempIO;
+						}
+						pDoc->m_bIsCompleted[i] = FALSE;
+					}
+					else pDoc->m_bIsCompleted[i] = TRUE;
+				}
+				
+				// Nozzle ¸ÎÈû °¨Áö ¼¾¼­ Check
+				//by shin//2009.08.18//Drop Count Sensor Setting½Ã¿¡Àº sensor°¨µµ º¯È­·Î ÀÎÇÑ 
+				//drop °¨Áö°¡ onµÇ¾î ÀÖÀ» ¼ö ÀÖÀ½À¸·Î Ã¼Å©ÇÏÁö ¾Ê´Â´Ù...//
+				for(i=0; i<MAX_NOZZLE ;i++)
+				{
+					if( pDoc->m_bIsHeadSelected[i] && pDoc->m_bDropCountSensorUSE[i] )
+					{
+						if(pView->m_pDevice->CheckDropSensor(i))
+						{
+							wTempIO=0x0001;
+							wTempIO=wTempIO<<i;
+							wIOResult1+=wTempIO;
+
+							N_Nozzle_Detect_Flag[i] = FALSE;
+
+							strLog.Empty();			//ehji 141106 ¸ÎÈû°¨Áö check Log
+							strLog.Format("NO.1 Form Detect Check : HEAD %d", i+1);
+							pView->SaveLog(0,strLog);
+						}
+					}
+				}
+
+#if	EQ
+
+#else 
+				wIOResult1 = 0;
+				wIOResult = 0;				
+#endif
+//2014.11.23 by tskim Drop °¨Áö »èÁ¦ 
+				wIOResult1 = 0;
+				//lbg Àá½Ã
+				if(wIOResult!=0)		// LC ¿ë¾×¿¡ °¨ÁöµÇÁö ¾ÊÀº HeadÀÇ ¹øÈ£ Á¤º¸°¡ ÀÖ´Ù.
+				{		
+					if(pDoc->m_structDataEditor.m_bIsTrfOnlyMode!=TRUE)
+					{
+						ThreadStage.ExitFlag = true;
+						m_nMeasureJob=1;
+						pView->SendMessage(WM_ERROR,17,wIOResult);
+						return;
+					}
+					
+				}
+				else if(wIOResult1!=0)	// Nozzle ¸ÎÈû °¨Áö ¼¾¼­..Head Á¤º¸ Æ÷ÇÔ.
+				{
+					
+
+//ehji 140926 ¸ÎÈû°¨Áö Head °³º° ºÐ¸®
+
+					WORD nTempWord = 0x0000; 
+ 
+					for ( int nHeadCount = 0; nHeadCount < MAX_NOZZLE; nHeadCount++ ) 
+					{ 
+						if( pDoc->m_bDropCountSensorUSE[nHeadCount] && pDoc->m_bIsHeadSelected[nHeadCount] ) 
+						{ 
+							nTempWord = 0x0001; 
+							nTempWord = nTempWord << nHeadCount; 
+							if ( (wIOResult1 & nTempWord) > 0 )  
+							{ 
+								pView->SendMessage(WM_ERROR,700+nHeadCount,NULL); 
+							} 
+						} 
+					} 
+
+					ThreadStage.ExitFlag = true;
+					m_nMeasureJob=1;
+
+//					pView->SendMessage(WM_ERROR,20,wIOResult1);	
+					return;					
+					
+				}
+				else
+				{
+					ThreadStage.ManualCode = 'I'; 
+					ThreadStage.ManualJobStep = 0;
+					ThreadStage.JobFlag = STAGE_MANUAL;
+					pView->RunThread(THREAD_STAGE);
+					if(ThreadStage.AdjustInitCode==0)	// Measure Loop Count Display
+					{
+						m_ctrlLoopCount1.SetBackColor(0x00ffff00); m_ctrlLoopCount2.SetBackColor(0x00ffff00); m_ctrlLoopCount3.SetBackColor(0x00ffff00);
+						m_ctrlLoopCount4.SetBackColor(0x00ffff00); m_ctrlLoopCount5.SetBackColor(0x00ffff00); m_ctrlLoopCount6.SetBackColor(0x00ffff00);
+						m_ctrlLoopCount7.SetBackColor(0x00ffff00); m_ctrlLoopCount8.SetBackColor(0x00ffff00); m_ctrlLoopCount9.SetBackColor(0x00ffff00);
+						m_ctrlLoopCount10.SetBackColor(0x00ffff00); m_ctrlLoopCount11.SetBackColor(0x00ffff00); m_ctrlLoopCount12.SetBackColor(0x00ffff00);	
+						m_ctrlLoopCount13.SetBackColor(0x00ffff00); m_ctrlLoopCount14.SetBackColor(0x00ffff00); m_ctrlLoopCount15.SetBackColor(0x00ffff00);
+						m_ctrlLoopCount16.SetBackColor(0x00ffff00); 
+					}
+					else		// Drop Counter Board Display
+					{
+						SetTimer(TIMER_DROP_COUNT_DISP,500,NULL);
+						m_ctrlLoopCount1.SetBackColor(0x0000ff80); m_ctrlLoopCount2.SetBackColor(0x0000ff80); m_ctrlLoopCount3.SetBackColor(0x0000ff80);
+						m_ctrlLoopCount4.SetBackColor(0x0000ff80); m_ctrlLoopCount5.SetBackColor(0x0000ff80); m_ctrlLoopCount6.SetBackColor(0x0000ff80);
+						m_ctrlLoopCount7.SetBackColor(0x0000ff80); m_ctrlLoopCount8.SetBackColor(0x0000ff80); m_ctrlLoopCount9.SetBackColor(0x0000ff80);
+						m_ctrlLoopCount10.SetBackColor(0x0000ff80); m_ctrlLoopCount11.SetBackColor(0x0000ff80); m_ctrlLoopCount12.SetBackColor(0x0000ff80);
+						m_ctrlLoopCount13.SetBackColor(0x0000ff80); m_ctrlLoopCount14.SetBackColor(0x0000ff80); m_ctrlLoopCount15.SetBackColor(0x0000ff80);
+						m_ctrlLoopCount16.SetBackColor(0x0000ff80); 
+					}
+					//
+					m_ctrlLoopCount1.SetCaption("0"); m_ctrlLoopCount2.SetCaption("0"); m_ctrlLoopCount3.SetCaption("0");
+					m_ctrlLoopCount4.SetCaption("0"); m_ctrlLoopCount5.SetCaption("0"); m_ctrlLoopCount6.SetCaption("0");
+					m_ctrlLoopCount7.SetCaption("0"); m_ctrlLoopCount8.SetCaption("0"); m_ctrlLoopCount9.SetCaption("0");
+					m_ctrlLoopCount10.SetCaption("0"); m_ctrlLoopCount11.SetCaption("0"); m_ctrlLoopCount12.SetCaption("0");
+					m_ctrlLoopCount13.SetCaption("0"); m_ctrlLoopCount14.SetCaption("0"); m_ctrlLoopCount15.SetCaption("0");
+					m_ctrlLoopCount16.SetCaption("0"); 
+					UpdateData(FALSE);
+
+					if(ThreadStage.AdjustInitCode=='G')
+					{
+						for (i=0 ; i<MAX_NOZZLE; i++) 
+						{
+							if(pDoc->m_structDataEditor.m_nCalibrationMode == 1)
+							{
+								for(j=0 ; j<MAX_MEADATA_FORCALIB ; j++) 
+								{
+									if(Drop_Info.manu_head_job[i] == TRUE)
+									{
+										if(i<MAX_NOZZLE/2)	
+										{
+											m_ctrlVolCalibResult1.SetRow(j+1);
+											m_ctrlVolCalibResult1.SetCol(i+2);
+											m_ctrlVolCalibResult1.SetCellBackColor(WHITE);					
+										}
+										else
+										{
+											m_ctrlVolCalibResult2.SetRow(j+1);
+											m_ctrlVolCalibResult2.SetCol(i-(MAX_NOZZLE/2)+2);
+											m_ctrlVolCalibResult2.SetCellBackColor(WHITE);
+										}
+									}
+								}
+							}
+						}
+					}
+				}				
+//			}
+		}
+		// Stop »óÅÂ¿¡¼­ 
+		// Stop ¹öÆ°ÀÌ OnµÇµµ·Ï ÇÑ´Ù.
+		pView->m_pDevice->Stop_button_onoff(true);
+		// Start ¹öÆ°Àº ±ô¹Ú°Å¸®°Ô ÇÑ´Ù.
+		if(m_nTimerCount==2) pView->m_pDevice->Start_button_onoff(true);
+		else if(m_nTimerCount>=4) 
+		{
+			pView->m_pDevice->Start_button_onoff(false);
+			m_nTimerCount = 0;
+		}
+		//
+		m_ctrlVolCalib.EnableWindow(true);
+		m_ctrlAdjust.EnableWindow(true);
+		m_ctrlMeasure.EnableWindow(true);
+		m_ctrlDummyDrop.EnableWindow(true);
+		if(pDoc->m_structDataEditor.m_nNzlMode != 1)
+			m_ctrlDropCount.EnableWindow(true);	
+		m_ctrlPumpInitial.EnableWindow(true);
+		m_ctrlVolCalculate.EnableWindow(true);
+		m_ctrlReturn.EnableWindow(true);
+		m_ctrlBalModeSet.EnableWindow(true);
+//2014.11.27 by tskim
+		m_ctrlNOffset.EnableWindow(true);
+		m_ctrlCalibApply.EnableWindow(true);
+		m_ctrlTargetMode.EnableWindow(true);
+	}
+	//////////////////////////////////////////////
+}
+void CAdjust::SubTimerDummyDropFunc()
+{
+	CMainFrame* pFrame = (CMainFrame*)AfxGetMainWnd();
+	CP8CA_LcDispView* pView = (CP8CA_LcDispView*)pFrame->GetActiveView();
+	CP8CA_LcDispDoc* pDoc = (CP8CA_LcDispDoc *)pFrame->GetActiveDocument();
+
+	DWORD dwIOResultF=0;
+	BOOL bIOResult=FALSE, bMiniDoorSafetyOK=FALSE;
+//
+	m_nTimerCount++;
+	m_ctrlMessageDummyDrop.SetCaption( ThreadStage.strMsg1 );
+	/////////////////////////////////////////////
+	if(ThreadStage.bMachineRunning == TRUE)
+	{
+		FAS_GetIo(1,false,&dwIOResultF);
+//2008.01.28 By tskim
+		FAS_GetIoBit(1,false,ROBOT_ARM_DETECT,&bIOResult);	// Robot Arm Check
+
+
+		if(pView->m_pDevice->SST_Check(STOP_SWITCH)) 
+		{
+			m_bSWCheck = false;//2010.01.19
+
+			//axis stop..
+			FAS_MoveStop(1,0,0);	//S0
+			FAS_MoveStop(1,1,0);	//K0
+			FAS_MoveStop(2,0,0);	//K1
+			FAS_MoveStop(2,1,0);	//K2
+
+			for(int iaxis = 4; iaxis < 16; iaxis++)
+			{
+				FAS_MoveStop(2,iaxis,0);	//S1~S12				
+			}
+
+			for(iaxis = 0; iaxis < 4; iaxis++)
+			{
+				FAS_MoveStop(3,iaxis,0);	//S13~S16				
+			}
+			//
+			ThreadStage.ExitFlag = true; // ** exit **
+			g_bMessageDisplay = TRUE;
+		}
+		// ÇöÀç Run »óÅÂ¿¡¼­ Start ¹öÆ°À» On ½ÃÄÑ ³õ´Â´Ù.
+		pView->m_pDevice->Start_button_onoff(true);
+		pView->m_pDevice->Stop_button_onoff(false);
+		m_nTimerCount = 0;
+		//
+		m_ctrlVolCalib.EnableWindow(false);
+		m_ctrlAdjust.EnableWindow(false);
+		m_ctrlMeasure.EnableWindow(false);
+		m_ctrlDummyDrop.EnableWindow(false);
+		m_ctrlDropCount.EnableWindow(false);	
+		m_ctrlPumpInitial.EnableWindow(false);
+		m_ctrlVolCalculate.EnableWindow(false);
+		m_ctrlReturn.EnableWindow(false);
+		m_ctrlBalModeSet.EnableWindow(false);
+//2014.11.27 by tskim
+		m_ctrlNOffset.EnableWindow(false);
+		m_ctrlCalibApply.EnableWindow(false);
+		m_ctrlTargetMode.EnableWindow(false);
+	}
+	else // ThreadStage.bMachineRunning == FALSE
+	{
+		//dummy drop
+		
+		if(g_bCountingFlag == TRUE) //by shin//2009.08.18//
+			
+			if(pView->m_nLanguage == 0)
+			ThreadStage.strMsg1="Drop Ä«¿îÆ® ¼ÂÆÃ ÈÄ ¹Ýµå½Ã 'Dummy Drop'À» ÅëÇØ Á¤»ó À¯¹« È®ÀÎÇÏ¼¼¿ä...";
+			else if(pView->m_nLanguage == 1)
+			ThreadStage.strMsg1="After Drop Count Setting, Check That Dummy Drop is normal or abnormal";
+			else if(pView->m_nLanguage == 2)
+			ThreadStage.strMsg1="Drop Count settingý¨ù±âÎ÷×Î¦ 'Dummy Drop'ü¬ìãïáßÈêóÙí...";
+
+		else
+			if(pView->m_nLanguage == 0)
+			ThreadStage.strMsg1="DummyDropÀ» ÇÏ·Á¸é START ¹öÆ°À» ´©¸£¼¼¿ä..";
+			else if(pView->m_nLanguage == 1)
+			ThreadStage.strMsg1="if you want to do DummyDrop, push START Button";
+			else if(pView->m_nLanguage == 2)
+			ThreadStage.strMsg1="âÍé©DummyDrop ïÇÌªSTARTäÎÒï..";
+
+		if(pView->m_pDevice->SST_Check(START_SWITCH)) 
+		{
+						m_bSWCheck = false;//2010.01.19
+			DWORD wIOResultF = 0,wIOResultR = 0 ;
+			FAS_GetIo(1,false,&wIOResultF); FAS_GetIo(1,false,&wIOResultR);
+//2008.01.28 By tskim
+			FAS_GetIoBit(1,false,ROBOT_ARM_DETECT,&bIOResult);	// Robot Arm Check
+
+				ThreadStage.ManualCode = 'M'; 
+				ThreadStage.ManualJobStep = 0;
+				ThreadStage.JobFlag = STAGE_MANUAL;
+				pView->RunThread(THREAD_STAGE);
+		}
+		// Stop »óÅÂ¿¡¼­ 
+		// Stop ¹öÆ°ÀÌ OnµÇµµ·Ï ÇÑ´Ù.
+		pView->m_pDevice->Stop_button_onoff(true);
+		// Start ¹öÆ°Àº ±ô¹Ú°Å¸®°Ô ÇÑ´Ù.
+		if(m_nTimerCount==2) pView->m_pDevice->Start_button_onoff(true);
+		else if(m_nTimerCount>=4) 
+		{
+			pView->m_pDevice->Start_button_onoff(false);
+			m_nTimerCount = 0;
+		}
+		//
+		m_ctrlVolCalib.EnableWindow(true);
+		m_ctrlAdjust.EnableWindow(true);
+		m_ctrlMeasure.EnableWindow(true);
+		m_ctrlDummyDrop.EnableWindow(true);
+		if(pDoc->m_structDataEditor.m_nNzlMode != 1)
+			m_ctrlDropCount.EnableWindow(true);	
+		m_ctrlPumpInitial.EnableWindow(true);
+		m_ctrlVolCalculate.EnableWindow(true);
+		m_ctrlReturn.EnableWindow(true);
+		m_ctrlBalModeSet.EnableWindow(true);
+//2014.11.27 by tskim
+		m_ctrlNOffset.EnableWindow(true);
+		m_ctrlCalibApply.EnableWindow(true);
+		m_ctrlTargetMode.EnableWindow(true);
+	}
+	////////////////////////////////////////////// 
+}
+
+void CAdjust::SubTimerAdjustMsgDispFunc()
+{
+	CMainFrame* pFrame = (CMainFrame*)AfxGetMainWnd();
+	CP8CA_LcDispView* pView = (CP8CA_LcDispView*)pFrame->GetActiveView();
+
+
+	m_ctrlMessage1.SetCaption(ThBal[BALID1].strMsg1);
+//	pView->SaveBalLog(BALID1,ThBal[BALID1].strMsg1);
+	m_ctrlMessage2.SetCaption(ThBal[BALID2].strMsg1);
+//	pView->SaveBalLog(BALID2,ThBal[BALID2].strMsg1);
+	m_ctrlMessage3.SetCaption(ThBal[BALID3].strMsg1);
+//	pView->SaveBalLog(BALID3,ThBal[BALID3].strMsg1);
+	m_ctrlMessage4.SetCaption(ThBal[BALID4].strMsg1);
+//	pView->SaveBalLog(BALID4,ThBal[BALID4].strMsg1);
+	m_ctrlMessage5.SetCaption(ThBal[BALID5].strMsg1);
+//	pView->SaveBalLog(BALID5,ThBal[BALID5].strMsg1);
+	m_ctrlMessage6.SetCaption(ThBal[BALID6].strMsg1);
+//	pView->SaveBalLog(BALID6,ThBal[BALID6].strMsg1);
+	m_ctrlMessage7.SetCaption(ThBal[BALID7].strMsg1);
+//	pView->SaveBalLog(BALID7,ThBal[BALID7].strMsg1);
+	m_ctrlMessage8.SetCaption(ThBal[BALID8].strMsg1);
+//	pView->SaveBalLog(BALID8,ThBal[BALID8].strMsg1);
+//
+	if(ThBal[BALID1].bRunning == TRUE)		m_ctrlMessage1.SetBackColor(DARKBLUE);
+	else									m_ctrlMessage1.SetBackColor(WHITEGRAY);
+	
+	if(ThBal[BALID2].bRunning == TRUE)		m_ctrlMessage2.SetBackColor(DARKBLUE);
+	else									m_ctrlMessage2.SetBackColor(WHITEGRAY);
+
+	if(ThBal[BALID3].bRunning == TRUE)		m_ctrlMessage3.SetBackColor(DARKBLUE);
+	else									m_ctrlMessage3.SetBackColor(WHITEGRAY);
+	
+	if(ThBal[BALID4].bRunning == TRUE)		m_ctrlMessage4.SetBackColor(DARKBLUE);
+	else									m_ctrlMessage4.SetBackColor(WHITEGRAY);
+
+	if(ThBal[BALID5].bRunning == TRUE)		m_ctrlMessage5.SetBackColor(DARKBLUE);
+	else									m_ctrlMessage5.SetBackColor(WHITEGRAY);
+
+	if(ThBal[BALID6].bRunning == TRUE)		m_ctrlMessage6.SetBackColor(DARKBLUE);
+	else									m_ctrlMessage6.SetBackColor(WHITEGRAY);
+
+	if(ThBal[BALID7].bRunning == TRUE)		m_ctrlMessage7.SetBackColor(DARKBLUE);
+	else									m_ctrlMessage7.SetBackColor(WHITEGRAY);
+
+	if(ThBal[BALID8].bRunning == TRUE)		m_ctrlMessage8.SetBackColor(DARKBLUE);
+	else									m_ctrlMessage8.SetBackColor(WHITEGRAY);
+
+// 	CString strLog;
+// 	for(int i=0;i<MAX_BAL;i++)
+// 	{
+// 		strLog.Format("Balance %d »óÅÂ %d",i+1,ThBal[i].bRunning);
+// 		pView->SaveLog(0,strLog);
+// 	}
+}
+
+void CAdjust::SubTimerAdjustMeasurdDataDispFunc()
+{
+	CMainFrame* pFrame = (CMainFrame*)AfxGetMainWnd();
+	CP8CA_LcDispView* pView = (CP8CA_LcDispView*)pFrame->GetActiveView();
+	CP8CA_LcDispDoc* pDoc = (CP8CA_LcDispDoc *)pFrame->GetActiveDocument();
+
+//
+	if(ThreadStage.AdjustInitCode=='G')
+	{
+//		if(pView->m_bMesuredDataSaveCompleted == TRUE)
+//		{
+			if(pView->m_bMesuredDataDisplayEnable == TRUE)	
+			{
+				if(pDoc->m_structDataEditor.m_nCalibrationMode == 1)
+					SubVolCalibResult(m_nR, m_nC);	
+				else if(pDoc->m_structDataEditor.m_nCalibrationMode == 2 || pDoc->m_structDataEditor.m_nCalibrationMode == 3)
+					SubFlexibleResult(m_nR, m_nC);
+				else if(pDoc->m_structDataEditor.m_nCalibrationMode == 4 || pDoc->m_structDataEditor.m_nCalibrationMode == 5)//2015.01.24 by tskim Section Calibration
+					SubSectionCalibResult(m_nR, m_nC);
+			}
+			pView->m_bMesuredDataDisplayEnable = FALSE;
+//		}
+	}
+	else
+	{
+		if(pView->m_bMesuredDataSaveCompleted == TRUE)
+		{
+			if(pView->m_bMesuredDataDisplayEnable == TRUE)	
+			{
+				SubDataProcess(m_nR , m_nC);
+				SubLoopCountProcess();
+			}
+			pView->m_bMesuredDataDisplayEnable = FALSE;
+		}
+	}
+}
+
+void CAdjust::SubTimerBalanceModeDispFunc()
+{
+	CMainFrame* pFrame = (CMainFrame*)AfxGetMainWnd();
+	CP8CA_LcDispView* pView = (CP8CA_LcDispView*)pFrame->GetActiveView();
+	CP8CA_LcDispDoc* pDoc = (CP8CA_LcDispDoc *)pFrame->GetActiveDocument();
+
+// 	if(pView->m_bBalanceModeDispEnable == TRUE){
+// 		if(ThBal[BALID1].nBalanceMode == 0){
+// 			if(m_ctrlBalModeSet.GetBackColor() != GREEN){
+// 				m_ctrlBalModeSet.SetBackColor(GREEN);	
+// 				m_ctrlBalModeSet.SetCaption("BALANCE : Á¤»ó¸ðµå");			
+// 			}
+// 		}	
+// 		else{
+// 			if(m_ctrlBalModeSet.GetBackColor() != LIGHTRED){
+// 				m_ctrlBalModeSet.SetBackColor(RED);
+// 				m_ctrlBalModeSet.SetCaption("BALANCE : ÀÌ»ó¸ðµå");
+// 			}
+// 		}
+// 	}
+// 	pView->m_bBalanceModeDispEnable = FALSE;
+
+
+	if(ThBal[BALID1].nBalanceMode == 0)
+	{
+		if(m_ctrlBalModeSet.GetBackColor() == LIGHTGRAY)
+			m_ctrlBalModeSet.SetBackColor(GREEN);	
+		else //if(m_ctrlBalModeSet.GetBackColor() == GREEN)
+			m_ctrlBalModeSet.SetBackColor(LIGHTGRAY);
+
+		if(pView->m_nLanguage ==0)
+		m_ctrlBalModeSet.SetCaption("BALANCE : Á¤»ó¸ðµå");
+		else if(pView->m_nLanguage ==1)
+		m_ctrlBalModeSet.SetCaption("BALANCE : Normal");
+		else if(pView->m_nLanguage ==2)
+		m_ctrlBalModeSet.SetCaption("BALANCE : ïáßÈÙ¼ãÒ");
+	}	
+	else
+	{
+		if(m_ctrlBalModeSet.GetBackColor() == LIGHTGRAY)
+			m_ctrlBalModeSet.SetBackColor(RED);	
+		else //if(m_ctrlBalModeSet.GetBackColor() == RED)
+			m_ctrlBalModeSet.SetBackColor(LIGHTGRAY);
+
+		if(pView->m_nLanguage ==0)
+		m_ctrlBalModeSet.SetCaption("BALANCE : ÁöÁø¸ðµå");
+		else if(pView->m_nLanguage ==1)
+		m_ctrlBalModeSet.SetCaption("BALANCE : abNormal");
+		else if(pView->m_nLanguage ==2)
+		m_ctrlBalModeSet.SetCaption("BALANCE : ò¢òèÙ¼ãÒ");
+	}
+}
+
+void CAdjust::OnPaint() 
+{
+	CPaintDC dc(this); // device context for painting
+	
+	// TODO: Add your message handler code here
+	CPen pen;
+	pen.CreatePen(PS_SOLID,5,DARKBLUE);
+	CPen *pOldPen = (CPen *)dc.SelectObject(&pen);
+
+	dc.MoveTo(0,HEIGHT_YPOS);
+	dc.LineTo(SCREEN_WIDTH,HEIGHT_YPOS);
+
+//	dc.MoveTo(0,SCREEN_HEIGHT - HEIGHT_YPOS);
+//	dc.LineTo(SCREEN_WIDTH,SCREEN_HEIGHT - HEIGHT_YPOS);
+
+	dc.SelectObject(pOldPen);	
+	
+	// Do not call CDialog::OnPaint() for painting messages
+}
+
+
+
+
+
+void CAdjust::OnClickMsflexgridVolcalibResult() 
+{
+	/*
+	CMainFrame *pFrame = (CMainFrame *)AfxGetMainWnd();
+	CP8ELcDispDoc *pDoc = (CP8ELcDispDoc *)pFrame->GetActiveDocument();
+	//
+	BOOL bSingleRow = TRUE;
+	double max = 10 , min = 2;
+	int nRow = 0, nCol = 0;
+	int i=0 , j=0;
+	//
+	nRow = m_ctrlVolCalibResult1.GetMouseRow();
+	nCol = m_ctrlVolCalibResult1.GetMouseCol();
+	
+	if( nCol == 0)	bSingleRow = FALSE;	
+
+	Use_TKg(m_ctrlVolCalibResult1, max, min, 15, 250, TRUE, bSingleRow);
+
+	// document
+	for(j=0 ; j<MAX_NOZZLE ;j++) // col
+	{
+		for (i =0 ; i <MAX_MEADATA_FORCALIB; i++) // row
+			pDoc->m_structCalibData[j].dMeasure[i][0] = atof((char *)(LPCSTR)m_ctrlVolCalibResult1.GetTextMatrix(i+1, j+1));
+	}
+	// file
+	pDoc->SaveVolCalibData();		
+	*/
+}
+
+void CAdjust::OnClickMsflexgridVolcalibResult2() 
+{
+	/*
+	CMainFrame *pFrame = (CMainFrame *)AfxGetMainWnd();
+	CP8ELcDispDoc *pDoc = (CP8ELcDispDoc *)pFrame->GetActiveDocument();
+	//
+	BOOL bSingleRow = TRUE;
+	double max = 700000 , min = 0;
+	int nRow = 0, nCol = 0;
+	int i=0 , j=0;
+	//
+	nRow = m_ctrlVolCalibResult2.GetMouseRow();
+	nCol = m_ctrlVolCalibResult2.GetMouseCol();
+	
+	if( nCol == 0)	bSingleRow = FALSE;	
+
+	Use_TKg(m_ctrlVolCalibResult2, max, min, 15, 400, TRUE, bSingleRow);
+
+	// document
+	for(j=0 ; j<MAX_NOZZLE ;j++) // col
+	{
+		for (i =0 ; i <MAX_MEADATA_FORCALIB; i++) // row
+			pDoc->m_structCalibData[j].dMeasure[i][1] = atof((char *)(LPCSTR)m_ctrlVolCalibResult2.GetTextMatrix(i+1, j+1));
+	}
+	// file
+	pDoc->SaveVolCalibData();	
+	*/
+}
+
+void CAdjust::OnClickBalModeSet() 
+{
+//	return;
+	CMainFrame* pFrame = (CMainFrame*)AfxGetMainWnd();
+	CP8CA_LcDispView* pView = (CP8CA_LcDispView*)pFrame->GetActiveView();
+	CP8CA_LcDispDoc* pDoc = (CP8CA_LcDispDoc *)pFrame->GetActiveDocument();
+	
+	CBalModeSelect dlg;
+	dlg.DoModal();	
+	pView->m_bBalanceModeDispEnable = TRUE;
+	KillTimer(TIMER_DROP_COUNT_DISP);
+}
+
+void CAdjust::SubTimerDropCountDisp()
+{
+	long aCount[18]={0,};
+	CString strTemp[MAX_NOZZLE];
+
+	FASC_GetAllCount(5,aCount);
+	for(int i=0;i<MAX_NOZZLE;i++)
+	{
+		strTemp[i].Format("%ld",aCount[i]);
+	}
+
+	m_ctrlLoopCount1.SetCaption(strTemp[0]); m_ctrlLoopCount2.SetCaption(strTemp[1]); m_ctrlLoopCount3.SetCaption(strTemp[2]);
+	m_ctrlLoopCount4.SetCaption(strTemp[3]); m_ctrlLoopCount5.SetCaption(strTemp[4]); m_ctrlLoopCount6.SetCaption(strTemp[5]);
+	m_ctrlLoopCount7.SetCaption(strTemp[6]); m_ctrlLoopCount8.SetCaption(strTemp[7]); m_ctrlLoopCount9.SetCaption(strTemp[8]);
+	m_ctrlLoopCount10.SetCaption(strTemp[9]); m_ctrlLoopCount11.SetCaption(strTemp[10]); m_ctrlLoopCount12.SetCaption(strTemp[11]);	
+	m_ctrlLoopCount13.SetCaption(strTemp[12]); m_ctrlLoopCount14.SetCaption(strTemp[13]); m_ctrlLoopCount15.SetCaption(strTemp[14]);
+	m_ctrlLoopCount16.SetCaption(strTemp[15]); 
+	UpdateData(FALSE);
+}
+
+void CAdjust::OnClickDummyCnt() 
+{
+	// TODO: Add your control notification handler code here
+	Use_TK(m_ctrlDummyCnt, 9999999, 1, 29, 244);
+	m_nManuDummyCnt = atoi(m_ctrlDummyCnt.GetCaption());	
+	//Use_TK(m_ctrlSetCount1, 1000, 0, 400, 300);
+	
+}
+
+void CAdjust::OnDblClickMsflexgridAdjust() 
+{
+	CMainFrame *pFrame = (CMainFrame *)AfxGetMainWnd();
+	CP8CA_LcDispView* pView = (CP8CA_LcDispView*)pFrame->GetActiveView();
+	CP8CA_LcDispDoc* pDoc = (CP8CA_LcDispDoc *)pFrame->GetActiveDocument();
+	//
+	BOOL bSingleRow = TRUE, bTmpJobHeadExist=FALSE;
+	double max = 0.0 , min = 0.0;
+	int nRow = 0, nCol = 0;
+	int i = 0;
+
+	//
+	//nRow = m_ctrlAdjustingCondition.GetMouseRow();
+	//nCol = m_ctrlAdjustingCondition.GetMouseCol();
+	nRow = m_ctrlAdjustingCondition.GetMouseRow();
+	nCol = m_ctrlAdjustingCondition.GetMouseCol();
+	bTmpJobHeadExist=FALSE;
+	if( nRow == 0 )	// m_nC = 0 , m_nC = 6
+	{
+		if( nCol == 0)
+		{			
+			for(i=0;i<MAX_NOZZLE/2;i++)
+			{
+				if((pDoc->m_bIsHeadSelected[m_nC+i] == TRUE)&&(Drop_Info.manu_head_job[m_nC+i]==TRUE))
+				{
+					bTmpJobHeadExist=true;
+					break;
+				}
+			}
+			if(bTmpJobHeadExist==TRUE)
+			{
+				for(i=0;i<MAX_NOZZLE/2;i++)
+				{
+					m_ctrlAdjustingCondition.SetRow(0);
+					//m_ctrlAdjustingCondition.SetCol(i+1);
+					m_ctrlAdjustingCondition.SetCol((MAX_NOZZLE/2+1)-(i+1));
+					Drop_Info.manu_head_job[m_nC+i] = false;
+					m_ctrlAdjustingCondition.SetCellBackColor(WHITEGRAY);
+				}
+			}
+			else
+			{
+				for(i=0;i<MAX_NOZZLE/2;i++)
+				{
+					m_ctrlAdjustingCondition.SetRow(0);
+					//m_ctrlAdjustingCondition.SetCol(i+1);
+					m_ctrlAdjustingCondition.SetCol((MAX_NOZZLE/2+1)-(i+1));
+					if(pDoc->m_bIsHeadSelected[m_nC+i] == TRUE)
+					{
+						Drop_Info.manu_head_job[m_nC+i] = true;
+						m_ctrlAdjustingCondition.SetCellBackColor(GREEN);
+					}
+					else
+					{
+						Drop_Info.manu_head_job[m_nC+i] = false;
+						m_ctrlAdjustingCondition.SetCellBackColor(WHITEGRAY);
+					}
+				}
+			}
+		}
+		else if(Drop_Info.manu_head_job[((MAX_NOZZLE/2+1)-nCol-1)+m_nC] == TRUE)
+		{
+			Drop_Info.manu_head_job[((MAX_NOZZLE/2+1)-nCol-1)+m_nC] = false;
+			m_ctrlAdjustingCondition.SetRow(0);
+			m_ctrlAdjustingCondition.SetCol(nCol);
+			m_ctrlAdjustingCondition.SetCellBackColor(WHITEGRAY);
+		}
+		else
+		{
+			Drop_Info.manu_head_job[((MAX_NOZZLE/2+1)-nCol-1)+m_nC] = true;
+			m_ctrlAdjustingCondition.SetRow(0);
+			m_ctrlAdjustingCondition.SetCol(nCol);
+			m_ctrlAdjustingCondition.SetCellBackColor(GREEN);
+		}
+		if(	ThreadStage.AdjustInitCode=='G')	return;
+		SubDataProcess(m_nR , m_nC);
+		return;
+	}
+
+//
+//	
+	if( nCol == 0)	bSingleRow = FALSE;	
+
+//	if(nRow == 1 )
+//	{ 
+//		max = 500 ; min = 0 ;
+//		m_ctrlAdjustingCondition.SetRow(1); // by ckh 2009.03.09
+//	} // ÅäÃâÈ½¼ö
+//	else if(nRow == 2 )
+//	{
+//		max = 100 ; 
+//		min = 1 ;
+//		m_ctrlAdjustingCondition.SetRow(2); // by ckh 2009.03.09
+//	} // ¹Ýº¹È½¼ö
+//	else return;
+//	 ÀÌ ºÎºÐÀº ÀÛ¾÷ÀÚ°¡ ¼öÁ¤ÇÏÁö ¸øÇÏµµ·Ï ¼öÁ¤ ¿äÃ»ÇÔ.
+//	else if(nRow == 3 ) // ¸ñÇ¥ÅäÃâ·®
+//	{ 
+//		if(m_bRun)	return;		
+//		max = 20 ; min = 0.1 ; 
+//	} 
+//	else if(nRow == 4 ) { max = 0.5 ; min = 0 ; } // ¸ñÇ¥¿ÀÂ÷
+	
+
+//	Use_TKg(m_ctrlAdjustingCondition, max, min, 29, 244, TRUE, bSingleRow);
+
+	// document¿¡ µ¥ÀÌÅ¸¸¦ °»½ÅÇÑ´Ù..
+	for (i =0 ; i <m_ctrlAdjustingCondition.GetCols() -1; i++)
+	{
+		pDoc->m_structAdjustCondition.nDropCount[i+m_nC] = atoi((char *)(LPCSTR)m_ctrlAdjustingCondition.GetTextMatrix(1, (MAX_NOZZLE/2+1)-(i+1)));
+		pDoc->m_structAdjustCondition.nLoopCount[i+m_nC] = atoi((char *)(LPCSTR)m_ctrlAdjustingCondition.GetTextMatrix(2, (MAX_NOZZLE/2+1)-(i+1)));
+		pDoc->m_structAdjustCondition.dTargetWeight[i+m_nC] = atof((char *)(LPCSTR)m_ctrlAdjustingCondition.GetTextMatrix(3, (MAX_NOZZLE/2+1)-(i+1)));
+		pDoc->m_structAdjustCondition.dTargetError[i+m_nC] = atof((char *)(LPCSTR)m_ctrlAdjustingCondition.GetTextMatrix(4, (MAX_NOZZLE/2+1)-(i+1)));
+	}
+	// file·Î ÀúÀå..
+	pDoc->SaveAdjustingCondition();
+}
+
+
+void CAdjust::OnClickCmdDropCounting() 
+{
+	// TODO: Add your control notification handler code here
+	CMainFrame* pFrame = (CMainFrame*)AfxGetMainWnd();
+	CP8CA_LcDispView* pView = (CP8CA_LcDispView*)pFrame->GetActiveView();
+	CP8CA_LcDispDoc* pDoc = (CP8CA_LcDispDoc *)pFrame->GetActiveDocument();
+ 	
+	if( pDoc->m_structDataEditor.m_nNzlMode != 1 )
+	{
+		m_nMeasureJob = 3;
+		g_bCountingFlag = TRUE;
+
+		m_ctrlVolCalib.SetBackColor(WHITEGRAY);
+		m_ctrlAdjust.SetBackColor(WHITEGRAY);
+		m_ctrlMeasure.SetBackColor(WHITEGRAY);
+		m_ctrlDummyDrop.SetBackColor(WHITEGRAY);	
+		m_ctrlDropCount.SetBackColor(YELLOW);	
+		
+		//by shin//2009.08.25//MC °ü·Ã TAS Ãß°¡...//
+		//Adjustment
+		m_nTasJob = 4;
+		pView->WriteTasMCData(TAS_MC, 9, BIT_OFF);
+		Sleep(10);
+		pView->WriteTasMCData(TAS_MC, 10, BIT_OFF);
+		Sleep(10);
+		pView->WriteTasMCData(TAS_MC, 11, BIT_OFF);
+		Sleep(10);
+
+		pView->WriteTasMCData(TAS_MC, 12, BIT_ON);
+		Sleep(200);
+		
+		SetTimer(TIMER_DROP_COUNT_DISP,500,NULL);	
+	}
+	else
+	{
+		CNModuleAging dlg; 
+		dlg.DoModal(); 
+	}
+
+////////////////////////////////////////////////////////
+}
+
+void CAdjust::OnClickApdReport() 
+{
+	CMainFrame *pFrame = (CMainFrame *)AfxGetMainWnd();
+	CP8CA_LcDispView* pView = (CP8CA_LcDispView*)pFrame->GetActiveView();
+
+	// TODO: Add your control notification handler code here
+	if(g_ManualApdReport == FALSE)
+	{
+		CNormalMsg dlg;
+		dlg.m_bTimer=FALSE;
+
+		if(pView->m_nLanguage == 0)
+		{
+			dlg.m_strTitle = _T("È®ÀÎ");
+			dlg.m_strMsg1 = " 'ÃøÁ¤°ª ¹× Á¶Á¤°ª¿¡ ´ëÇÑ APD º¸°í¸¦ ÇÏ°Ú½À´Ï±î?";
+			dlg.m_strMsg2 = " º¸°í¸¦ ÇÏ·Á¸é 'OK', ±×·¸Áö ¾ÊÀ¸¸é 'CANCEL'À» ´©¸£¼¼¿ä";
+		}
+		else if(pView->m_nLanguage == 1)
+		{
+			dlg.m_strTitle = _T("Check");
+			dlg.m_strMsg1 = " 'Will you Report APD about Calibration value & Adjust value ?";
+			dlg.m_strMsg2 = " if you Report 'OK', or Not Peport, Please Push Button 'CANCEL'";
+		}
+		else if(pView->m_nLanguage == 2)
+		{
+			dlg.m_strTitle = _T("ü¬ìã");
+			dlg.m_strMsg1 = " 'àâïÒö·ÐàðàïÚö·âÍé©ÓßAPDÜÃÍ±Ø§?";
+			dlg.m_strMsg2 = " åýâÍÜÃÍ±ïÇÌªOK£¬ÜúöÎïÇÌªCANCEL";
+		}
+
+
+		if( dlg.DoModal() == IDOK )
+		{		
+			m_ctrlApdReport.SetCaption("APD º¸°í ON");
+			m_ctrlApdReport.SetBackColor(RED);
+			g_ManualApdReport = TRUE;
+		}
+		else return;
+	}
+	else
+	{
+		m_ctrlApdReport.SetCaption("APD º¸°í OFF");
+		m_ctrlApdReport.SetBackColor(YELLOW);
+		g_ManualApdReport = FALSE;
+	}
+}
+
+void CAdjust::OnClickAdjustError() 
+{
+	// TODO: Add your control notification handler code here
+	CMainFrame *pFrame = (CMainFrame *)AfxGetMainWnd();
+	CP8CA_LcDispView* pView = (CP8CA_LcDispView*)pFrame->GetActiveView();
+	CP8CA_LcDispDoc* pDoc = (CP8CA_LcDispDoc *)pFrame->GetActiveDocument(); 
+	CString str = " ";
+
+	Use_TK(m_ctrlAdjustError,pDoc->m_structAdjustCondition.dTargetError[0], 0.01, 29, 244);
+	m_dAdjustError = atof(m_ctrlAdjustError.GetCaption());	
+	
+	str.Format("%.2f", m_dAdjustError);
+	m_ctrlAdjustError.SetCaption(str);
+
+}
+
+void CAdjust::OnClickMeasureCount() 
+{
+	// TODO: Add your control notification handler code here
+	CMainFrame *pFrame = (CMainFrame *)AfxGetMainWnd();
+	CP8CA_LcDispView* pView = (CP8CA_LcDispView*)pFrame->GetActiveView();
+	CP8CA_LcDispDoc* pDoc = (CP8CA_LcDispDoc *)pFrame->GetActiveDocument();
+
+	CString str = " ";
+
+	Use_TK(m_ctrlManuMeasureCount,500, 1, 29, 244);
+	g_nManuMeasureLoopCount = atoi(m_ctrlManuMeasureCount.GetCaption());
+
+	str.Format("%d", g_nManuMeasureLoopCount);
+	m_ctrlManuMeasureCount.SetCaption(str);
+}
+
+
+//For Test 2010.01.05
+void CAdjust::OnClickLabelRecipe() 
+{
+	if(!g_bRemoteControl) return;
+	CTempOP dlg;
+	dlg.DoModal();
+//#if PLC
+	// TODO: Add your control notification handler code here
+// 	CMainFrame *pFrame = (CMainFrame *)AfxGetMainWnd();
+// 	CP8ELcDispDoc *pDoc = (CP8ELcDispDoc *)pFrame->GetActiveDocument();
+// 	CP8ELcDispView* pView = (CP8ELcDispView*)pFrame->GetActiveView();
+// 	DWORD wIOResultF = 0, wIOResultR = 0;
+// 	WORD wTempIO = 0 , wIOResult=0, wIOResult1=0;
+// 	BOOL bIOResult=false, bMiniDoorSafetyOK=FALSE;
+// 	DWORD dwIOResultF=0;
+// 	int i=0,j=0;
+// 
+// 	wIOResult = 0x0000;	wIOResult1=0x0000;
+// 	for(i=0; i<MAX_NOZZLE ;i++){
+// 		if(Drop_Info.manu_head_job[i] == TRUE)
+// 		{
+// 			FAS_GetIoBit(1,true,LC_LIMIT1+i,&bIOResult);			
+// 			if((!bIOResult) && (pDoc->m_bRemainSensorUSE[i]==TRUE))
+// 			{
+// 				wTempIO=0x0001;
+// 				wTempIO=wTempIO<<i;
+// 				wIOResult+=wTempIO;
+// 			}
+// 			pDoc->m_bIsCompleted[i] =  TRUE;
+// 		}
+// 		else pDoc->m_bIsCompleted[i] = TRUE;
+// 	}
+// 	pDoc->m_bIsCompleted[13] = FALSE;
+// 	ThreadStage.ManualCode = 'I'; 
+// 	ThreadStage.ManualJobStep = 0;
+// 	ThreadStage.JobFlag = STAGE_MANUAL;
+// 	pView->RunThread(THREAD_STAGE);
+//#endif
+}
+
+void CAdjust::OnDblClickBalanceCal(LPDISPATCH Cancel) 
+{
+//	return;
+	// TODO: Add your control notification handler code here
+	CBalanceCalibration dlg;
+	dlg.DoModal();
+}
+
+void CAdjust::OnRButtonDblClk(UINT nFlags, CPoint point) 
+{
+	CMainFrame* pFrame = (CMainFrame*)AfxGetMainWnd();
+	CP8CA_LcDispView* pView = (CP8CA_LcDispView*)pFrame->GetActiveView();
+	CP8CA_LcDispDoc* pDoc = (CP8CA_LcDispDoc *)pFrame->GetActiveDocument();
+
+	// TODO: Add your message handler code here and/or call default
+	if(g_bRemoteControl)
+		pView->pTempOp->DoModal();
+	else
+		AfxMessageBox("Remote Mode Off!");
+	CDialog::OnRButtonDblClk(nFlags, point);
+}
+
+void CAdjust::OnClickDummyCycle() //2010.12.02 by tskim ½ÂÇö
+{
+	// TODO: Add your control notification handler code here
+	Use_TK(m_ctrlDummyCycle, 9999999, 1, 29, 244);
+	m_nDummyCycle = atoi(m_ctrlDummyCycle.GetCaption());	
+	//Use_TK(m_ctrlSetCount1, 1000, 0, 400, 300);	
+}
+
+void CAdjust::OnClickTargetMode() 
+{
+	// TODO: Add your control notification handler code here
+	CMainFrame* pFrame = (CMainFrame*)AfxGetMainWnd();
+	CP8CA_LcDispView* pView = (CP8CA_LcDispView*)pFrame->GetActiveView();
+	CP8CA_LcDispDoc* pDoc = (CP8CA_LcDispDoc *)pFrame->GetActiveDocument();
+
+	int i;
+	for(i=0;i<MAX_BAL;i++)
+		m_bMeasureInterlock |= ThBal[i].bAdjust;
+ 
+	if(m_bMeasureInterlock || pDoc->m_structDataEditor.m_nCalibrationMode == 0) return;
+
+	if(g_bMultiTargetMeas)
+	{
+		m_ctrlTargetMode.SetCaption("SINGLE TARGET");
+		m_ctrlTargetMode.SetBackColor(GREEN);
+		g_bMultiTargetMeas = FALSE;
+		GetDlgItem(IDC_TARGET_SET)->EnableWindow(FALSE);		
+	}
+	else
+	{
+		m_ctrlTargetMode.SetCaption("MULTI TARGET");
+		m_ctrlTargetMode.SetBackColor(YELLOW);
+		g_bMultiTargetMeas = TRUE;
+		GetDlgItem(IDC_TARGET_SET)->EnableWindow(TRUE);
+	}	
+}
+
+void CAdjust::OnClickTargetSet() 
+{
+	// TODO: Add your control notification handler code here
+	if(!g_bMultiTargetMeas) return;
+
+	CTarget dlg;
+	dlg.DoModal();
+}
+
+void CAdjust::OnDblClickCalibrationApply(LPDISPATCH Cancel) 
+{
+	// TODO: Add your control notification handler code here
+	CMainFrame *pFrame = (CMainFrame *)AfxGetMainWnd();
+	CP8CA_LcDispView* pView = (CP8CA_LcDispView*)pFrame->GetActiveView();
+	CP8CA_LcDispDoc* pDoc = (CP8CA_LcDispDoc *)pFrame->GetActiveDocument();
+
+	int i=0,j=0;
+	
+	CString str="";
+#if EQ
+//	if ( !g_bAceeptSettingStatus ) //141113 ÀÌÀü ¼³Á¤ Àû¿ë ½Ã ÀÎÅÍ¶ô ÇØÀç 
+	{
+		for(int nCount = 0; nCount < MAX_NOZZLE; nCount++)
+		{
+			if(Drop_Info.manu_head_job[nCount])
+			{
+				if ( !g_bCalibrationStatus[nCount] )
+				{
+					if(pView->m_nLanguage == 0)
+					AfxMessageBox("±³Á¤°ªÀ» È®ÀÎ ÇÏ½Ã°í ´Ù½Ã ½ÇÇàÇÏ¼¼¿ä.");
+
+					else if(pView->m_nLanguage == 1)
+					AfxMessageBox("Check Calibration Value and Retry it.");
+					
+					else if(pView->m_nLanguage == 2)
+					AfxMessageBox("ü¬ìãÎèïáö·î¢òûú¼."); 
+
+					return; //20190710 JEONGYONG - ±³Á¤°ª ¾È¸ÂÀ» ½Ã ¸®ÅÏ
+				}
+			}
+		}
+	}
+#endif
+	str.Format("Do you calculate adjusting data on the basis of calibration?");
+	if(AfxMessageBox(str,MB_SYSTEMMODAL|MB_YESNO)==IDYES)
+	{
+		node *poly; node *polybk;
+
+		if(pDoc->m_structDataEditor.m_bSelectDropMode) //Flexible Calibration	
+		{
+			for(int iheadindex=0; iheadindex< MAX_NOZZLE ; iheadindex++)
+			{
+				if(Drop_Info.manu_head_job[iheadindex])
+				{
+					//double dMeasureFlexible[MAX_MEADATA_GETCOUNT4][4];	//ÃøÁ¤ °ª/Pulse/±¸°£ ±â¿ï±â(mg/pulse)/Æò±Õ±â¿ï±â
+					//±¸°£ ±â¿ï±â dMeasureFlexible[MAX_MEADATA_GETCOUNT4][2]
+					//by shin//2011.05.09//±¸°£ Æò±Õ »ç¿ë¾ÈÇÔ.//
+					if(pDoc->m_structDataEditor.m_nCalibrationMode == 2)
+					{
+						for(j = 0; j < pDoc->m_structDataEditor.m_nFlexCalibrationMaxBlockNum; j++) //±¸°£º° Æò±Õ ±â¿ï±â//
+						{
+							pDoc->m_structCalibData[iheadindex].dMeasureFlexible[j][3] 
+									= pDoc->m_structCalibData[iheadindex].dMeasureFlexible[j][2];
+						}
+					}
+					else if(pDoc->m_structDataEditor.m_nCalibrationMode == 3)
+					{
+						for(j = 0; j < 1/*pDoc->m_structDataEditor.m_nFlexCalibrationMaxBlockNum*/; j++) //±¸°£º° Æò±Õ ±â¿ï±â//
+						{
+							pDoc->m_structCalibData[iheadindex].dMeasureFlexibleFirst[j][3] 
+									= pDoc->m_structCalibData[iheadindex].dMeasureFlexibleFirst[j][2];
+						}
+					}
+					else if(pDoc->m_structDataEditor.m_nCalibrationMode == 4)
+					{
+						for(j = 0; j < pDoc->m_structDataEditor.m_nFlexCalibrationMaxBlockNum; j++) //±¸°£º° Æò±Õ ±â¿ï±â//
+						{
+							pDoc->m_structCalibData[iheadindex].dMeasureSection[j][3] 
+									= pDoc->m_structCalibData[iheadindex].dMeasureSection[j][2];
+						}						
+					}
+					else if(pDoc->m_structDataEditor.m_nCalibrationMode == 5)
+					{
+						for(j = 0; j < 1/* pDoc->m_structDataEditor.m_nFlexCalibrationMaxBlockNum*/; j++) //±¸°£º° Æò±Õ ±â¿ï±â//
+						{
+							pDoc->m_structCalibData[iheadindex].dMeasureFirstSection[j][3] 
+									= pDoc->m_structCalibData[iheadindex].dMeasureFirstSection[j][2];
+						}						
+					}
+				}
+			}
+		}
+		else //General Calibration
+		{
+			if(pDoc->m_structDataEditor.m_nCalibrationMode == 1) //3Point
+			{
+				for(int iheadindex=0; iheadindex< MAX_NOZZLE ; iheadindex++)
+				{
+					if(Drop_Info.manu_head_job[iheadindex])
+					{
+//2011.05.12 by tskim
+						// Calibration Data Áß VolumnÀÌ ¼­·Î °°Àº °ÍÀÌ ÀÖ´ÂÁö È®ÀÎÇÏ¿© °°Àº°ªÀÌ ÀÖÀ¸¸é Error¸¦ ¹ß»ý½ÃÅ²´Ù.			
+/*						for (i=0; i<MAX_MEADATA_GETCOUNT1; i++)
+						{
+							for(j=0; j<MAX_MEADATA_GETCOUNT1; j++)	 
+							{
+								if (i==j) continue;
+								if (pDoc->m_structCalibData[iheadindex].dMeasure[i][0] == pDoc->m_structCalibData[iheadindex].dMeasure[j][0])
+								{ i=20 ; break; }
+							}
+						}
+						if(i==21) 
+						{
+							str.Format("Head%d is not Calculated",iheadindex+1);
+							AfxMessageBox(str);
+							continue;
+						}*/
+
+						//2008.12.11 by tskim 
+						//dMeasure[][]/ÃøÁ¤·®/ÆÞ½º¼ö
+						// °¢ Data  ±¸°£º° Calibration Data¸¦ ÃëµæÇÏ±â À§ÇØ ¾òÀº data¸¦ Àç¹è¿­ÇÑ´Ù.
+						for(j=0;j<MAX_MEADATA_FORCALIB;j++)
+						{
+							pDoc->m_structCalibData[iheadindex].dMeasure1[j][0]=pDoc->m_structCalibData[iheadindex].dMeasure[j][0];
+							pDoc->m_structCalibData[iheadindex].dMeasure1[j][1]=pDoc->m_structCalibData[iheadindex].dMeasure[j][1];
+							
+							pDoc->m_structCalibData[iheadindex].dMeasure2[j][0]=pDoc->m_structCalibData[iheadindex].dMeasure[j+1][0];
+							pDoc->m_structCalibData[iheadindex].dMeasure2[j][1]=pDoc->m_structCalibData[iheadindex].dMeasure[j+1][1];
+							
+						}
+
+						FILE *fp;
+						CString strPath ="";
+						int i=0 ,j=0, k=0 ;
+					//
+						strPath.Format("%s\\MeasureData_3.dat", pDoc->m_strDataPath);	
+						fp = fopen((char *)(LPCSTR)strPath, "wt");
+						if(!fp) 
+						{
+							AfxMessageBox("MeasureData_3.dat file make faile.");
+							return;
+						}
+						// vol
+						for(i = 0 ; i < MAX_NOZZLE ;i++)
+						{
+							for(j = 0; j < MAX_MEADATA_FORCALIB; j++)
+							{
+								for(k = 0; k < 2; k++)
+									fprintf(fp, "%.5f\t\t", pDoc->m_structCalibData[i].dMeasure1[j][k]);
+							}
+							fprintf(fp, "\n");
+							for(j = 0; j < MAX_MEADATA_FORCALIB; j++)
+							{
+								for(k = 0; k < 2; k++)
+									fprintf(fp, "%.5f\t\t", pDoc->m_structCalibData[i].dMeasure2[j][k]);
+							}
+							fprintf(fp, "\n");
+							fprintf(fp, "\n");	
+						}
+						fclose(fp);
+
+						// °¢ Data  ±¸°£º° Àû¿ëµÇ´Â °è¼ö¸¦ ±¸ÇÑ´Ù.
+						if ((poly = lagrange(pDoc->m_structCalibData[iheadindex].dMeasure1, MAX_MEADATA_FORCALIB)) != NULL)
+						{
+							while (poly->next)
+							{
+								polybk = poly;
+								poly = poly->next;						
+								pDoc->m_structCalibData[iheadindex].dCoefficient1[(MAX_MEADATA_FORCALIB-1) - (poly->degree)] = poly->coef;
+							}
+						}
+						
+						if ((poly = lagrange(pDoc->m_structCalibData[iheadindex].dMeasure2, MAX_MEADATA_FORCALIB)) != NULL)
+						{
+							while (poly->next)
+							{
+								polybk = poly;
+								poly = poly->next;
+								pDoc->m_structCalibData[iheadindex].dCoefficient2[(MAX_MEADATA_FORCALIB-1) - (poly->degree)] = poly->coef;
+							}
+						}						
+					}
+				}
+			}
+		}
+		if(poly!=NULL)		poly=NULL;
+		if(polybk!=NULL)	polybk=NULL;
+		delete poly;
+		delete polybk;
+
+		if(pDoc->m_structDataEditor.m_bSelectDropMode) //Flexible Calibration	
+		{
+			if(pDoc->m_structDataEditor.m_nCalibrationMode == 2)
+				pDoc->SaveFlexibleData();
+			else if(pDoc->m_structDataEditor.m_nCalibrationMode == 3)//Data È¥µ¿ ¹æÁö Ã³À½ºÎÅÍ º°µµ ÆÄÀÏ·Î °£´Ù...
+				pDoc->Save_FlexibleData_First();
+			else if(pDoc->m_structDataEditor.m_nCalibrationMode == 4)//2015.01.24 by tskim Section Calibration
+				pDoc->Save_SectionCalibrationData();
+			else if(pDoc->m_structDataEditor.m_nCalibrationMode == 5)//Data È¥µ¿ ¹æÁö Ã³À½ºÎÅÍ º°µµ ÆÄÀÏ·Î °£´Ù...
+				pDoc->Save_Section1stCalibrationData();
+		}
+		else //General Calibration	
+		{
+			if(pDoc->m_structDataEditor.m_nCalibrationMode == 1)//3Point
+			{
+				pDoc->SaveVolCalibData();
+			}
+		}
+		g_bCalibrationApply=TRUE;
+		Sleep(100);
+
+		g_bAceeptSettingStatus = TRUE;
+///////////////////////////////////////////////////////////////////////////////////////
+//20190710 JEONGYONG - »ç¿ëÇÏ´Â Çìµå Áß ÇÑ°³ Çìµå¶óµµ ¹Ì¿Ï·á ½Ã ÀÎÅÍ¶ô Ã¼Å© ÁøÇà
+		for(int iheadindex=0; iheadindex< MAX_NOZZLE ; iheadindex++)
+		{
+			if((pDoc->m_bIsHeadSelected[iheadindex] == TRUE) && (g_bCalibrationStatus[iheadindex] == FALSE))//»ç¿ëÇìµå Áß ÇÑ°³¶óµµ Ä¶¸®ºê·¹ÀÌ¼Ç ¹Ì¿Ï·á ½Ã
+			{
+				g_bAceeptSettingStatus = FALSE;		//ehji 141123	
+				g_bCalibrationApply = FALSE;
+			}
+		}
+///////////////////////////////////////////////////////////////////////////////////////
+	}
+
+	else return;	
+
+
+}
+
+void CAdjust::SubFlexibleResult(int r, int c)
+{
+	CMainFrame* pFrame = (CMainFrame*)AfxGetMainWnd();
+	CP8CA_LcDispView* pView = (CP8CA_LcDispView*)pFrame->GetActiveView();
+	CP8CA_LcDispDoc* pDoc = (CP8CA_LcDispDoc *)pFrame->GetActiveDocument();
+
+
+	CString str = "";
+	int i=0 , j=0;
+	int nTempRaw = 0;
+	double dTempCalWeight = 0.0;
+	if ( r == 20 ) return; 
+	m_ctrlVolCalibResult1.ShowWindow(SW_HIDE);		m_ctrlVolCalibResult2.ShowWindow(SW_HIDE);
+
+	if(pDoc->m_structDataEditor.m_nCalibrationMode == 2)
+		nTempRaw = pDoc->m_structDataEditor.m_nFlexCalibrationMaxBlockNum;
+	else if(pDoc->m_structDataEditor.m_nCalibrationMode == 3)
+		nTempRaw = 1;
+
+	// column width ¼³Á¤
+	for(i=0; i<MAX_NOZZLE/2+1;i++)
+	{
+		if(i==0)	m_ctrlVolCalibResult1.SetColWidth(i, 2100);
+		else		m_ctrlVolCalibResult1.SetColWidth(i, 1210);
+		m_ctrlVolCalibResult1.SetColAlignment(i,4);
+	}
+	for(i=0 ; i < nTempRaw; i++) 		
+	{
+		m_ctrlVolCalibResult1.SetRowHeight(i, 395); 
+		str.Format("Point%d",i+1);	m_ctrlVolCalibResult1.SetTextMatrix(i, 0, str);	
+	}
+
+	for(i=0; i<MAX_NOZZLE/2+1;i++)
+	{
+		for(j=0 ; j < nTempRaw; j++) 		
+		{
+			m_ctrlVolCalibResult1.SetRow(j);
+			m_ctrlVolCalibResult1.SetCol(i);
+			m_ctrlVolCalibResult1.SetCellFontSize(9);
+		}
+	}
+
+	if(c==0)
+	{	
+		for (i = 0 ; i< MAX_NOZZLE/2; i++) 
+		{
+			for(j=0 ; j< nTempRaw ; j++)//18 
+			{
+//				if(r==0)	
+				if(pDoc->m_structDataEditor.m_nCalibrationMode == 2)	
+					str.Format("%.3f  /  %.0f",pDoc->m_structCalibData[i].dMeasureFlexible[j][0],pDoc->m_structCalibData[i].dMeasureFlexible[j][1]); //ÃøÁ¤°ª/pulse
+				else if(pDoc->m_structDataEditor.m_nCalibrationMode == 3)
+					str.Format("%.3f  /  %.0f",pDoc->m_structCalibData[i].dMeasureFlexibleFirst[j][0],pDoc->m_structCalibData[i].dMeasureFlexibleFirst[j][1]); //ÃøÁ¤°ª/pulse
+
+				m_ctrlVolCalibResult1.SetRow(j);			m_ctrlVolCalibResult1.SetCol((MAX_NOZZLE/2-i));
+				m_ctrlVolCalibResult1.SetTextMatrix(j, (MAX_NOZZLE/2-i) ,(LPCSTR)str);
+	
+				if(!pView->m_bCalibUpDate2[i][j])
+					m_ctrlVolCalibResult1.SetCellBackColor(WHITE);
+				else
+				{
+					if(pDoc->m_structDataEditor.m_nCalibrationMode == 2)
+						dTempCalWeight = pDoc->m_structCalibData[i].dMeasureFlexible[j][0];
+					else if(pDoc->m_structDataEditor.m_nCalibrationMode == 3)
+						dTempCalWeight = pDoc->m_structCalibData[i].dMeasureFlexibleFirst[j][0];
+					if(!pView->Judgement(dTempCalWeight, (30*(j+1)), pDoc->m_structAdjustCondition.dCalibrationInterlock))
+					{
+						m_ctrlVolCalibResult1.SetCellBackColor(RED);	
+						g_bCalibrationStatus[i] = FALSE; //120419 by shlee							
+					}
+					else{
+						m_ctrlVolCalibResult1.SetCellBackColor(YELLOW);					
+					}
+				}				
+			}
+		}
+	}
+	else if(c==8)
+	{	
+		for (i = MAX_NOZZLE/2 ; i< MAX_NOZZLE; i++) 
+		{
+			for(j=0 ; j<nTempRaw; j++) 
+			{
+//				if(r == 0)
+				if(pDoc->m_structDataEditor.m_nCalibrationMode == 2)
+					str.Format("%.3f  /  %.0f",pDoc->m_structCalibData[i].dMeasureFlexible[j][0],pDoc->m_structCalibData[i].dMeasureFlexible[j][1]);
+				else if(pDoc->m_structDataEditor.m_nCalibrationMode == 3)
+					str.Format("%.3f  /  %.0f",pDoc->m_structCalibData[i].dMeasureFlexibleFirst[j][0],pDoc->m_structCalibData[i].dMeasureFlexibleFirst[j][1]);
+
+				m_ctrlVolCalibResult1.SetRow(j);				
+				m_ctrlVolCalibResult1.SetCol((MAX_NOZZLE-i));
+				m_ctrlVolCalibResult1.SetTextMatrix(j, (MAX_NOZZLE-i) ,(LPCSTR)str);
+				
+				if(!pView->m_bCalibUpDate2[i][j])
+					m_ctrlVolCalibResult1.SetCellBackColor(WHITE);
+				else
+				{
+					if(pDoc->m_structDataEditor.m_nCalibrationMode == 2)
+						dTempCalWeight = pDoc->m_structCalibData[i].dMeasureFlexible[j][0];
+					else if(pDoc->m_structDataEditor.m_nCalibrationMode == 3)
+						dTempCalWeight = pDoc->m_structCalibData[i].dMeasureFlexibleFirst[j][0];
+					
+					if(!pView->Judgement(dTempCalWeight, (30*(j+1)), pDoc->m_structAdjustCondition.dCalibrationInterlock))
+					{
+						m_ctrlVolCalibResult1.SetCellBackColor(RED);
+						g_bCalibrationStatus[i] = FALSE; //120419 by shlee
+					}
+					else{
+						m_ctrlVolCalibResult1.SetCellBackColor(YELLOW);					
+					}
+				}					
+			}
+		}
+	}
+	m_ctrlVolCalibResult1.ShowWindow(SW_SHOW);
+}
+
+void CAdjust::OnClickCmdTitle() 
+{
+	// TODO: Add your control notification handler code here
+#if N_MODIFY_EQ
+	CPiezoStatus dlg;
+	dlg.DoModal();	
+#endif	
+}
+
+void CAdjust::OnClickInitialOnoff() 
+{
+	// TODO: Add your control notification handler code here
+ 	CMainFrame* pFrame = (CMainFrame*)AfxGetMainWnd();
+ 	CP8CA_LcDispView* pView = (CP8CA_LcDispView*)pFrame->GetActiveView();
+ 	CP8CA_LcDispDoc* pDoc = (CP8CA_LcDispDoc *)pFrame->GetActiveDocument();
+ 
+ 	int i;
+ 
+ 	if(g_bInitialShot)
+ 	{
+ 		m_ctrlInitialMode.SetCaption("INITIAL SHOT OFF");
+ 		m_ctrlInitialMode.SetBackColor(YELLOW);
+ 		g_bInitialShot = FALSE;	
+ 	}
+ 	else
+ 	{
+ 		m_ctrlInitialMode.SetCaption("INITIAL SHOT ON");
+ 		m_ctrlInitialMode.SetBackColor(GREEN);
+ 		g_bInitialShot = TRUE;
+ 	}		
+}
+
+void CAdjust::SelectLanguage()
+{
+	CMainFrame *pFrame = (CMainFrame*)AfxGetMainWnd();
+	CP8CA_LcDispView* pView = (CP8CA_LcDispView*)pFrame->GetActiveView();
+
+	if(pView->m_nLanguage == 0)	//ehji 140309
+	{
+		SetDlgItemText(IDC_CMD_TITLE,				_T("ÃøÁ¤ & Á¶Á¤"));
+		SetDlgItemText(IDC_CALIBRATION_APPLY,				_T("Calibration °è»êÄ¡ Àû¿ë"));
+		SetDlgItemText(IDC_BAL_MODE_SET,				_T("BALANCE MODE : Á¤»ó"));
+		SetDlgItemText(IDC_BALANCE_CAL,				_T("BALANCE ±³Á¤"));
+		SetDlgItemText(IDC_BTN_PUMP_INITIAL,				_T("ÆßÇÁ ÃÊ±âÈ­"));
+		SetDlgItemText(IDC_BTN_SEQ_INITIAL,				_T("ÃøÁ¤°á°ú ±×·¡ÇÁ"));
+		SetDlgItemText(IDC_CMD_ADJUST,				_T("ÅäÃâ·® Á¶Á¤"));
+		SetDlgItemText(IDC_LABEL13,				_T("Á¶Á¤ ¿ÀÂ÷(%)"));
+		SetDlgItemText(IDC_CMD_MEASURE,				_T("ÅäÃâ·® ÃøÁ¤"));
+		SetDlgItemText(IDC_LABEL37,				_T("ÃøÁ¤ È½¼ö(È¸)"));
+		SetDlgItemText(IDC_CMD_DROP_COUNTING,				_T("Drop Ä«¿îÆ® ¼ÂÆÃ"));
+		SetDlgItemText(IDC_APD_REPORT,				_T("APD DATA º¸°í OFF"));
+		SetDlgItemText(IDC_CMD_RETURN,				_T("ÀÌÀü È­¸é"));
+	}
+
+	else if(pView->m_nLanguage == 1)	//ehji 140309
+	{
+		SetDlgItemText(IDC_CMD_TITLE,				_T("Adjust & Calibration"));
+		SetDlgItemText(IDC_CALIBRATION_APPLY,				_T("Calibration Calculating Apply"));
+		SetDlgItemText(IDC_BAL_MODE_SET,				_T("BALANCE MODE : Normal"));
+		SetDlgItemText(IDC_BALANCE_CAL,				_T("BALANCE Correction"));
+		SetDlgItemText(IDC_BTN_PUMP_INITIAL,				_T("Pump Initial"));
+		SetDlgItemText(IDC_BTN_SEQ_INITIAL,				_T("Measure graph"));
+		SetDlgItemText(IDC_CMD_ADJUST,				_T("Adjust"));
+		SetDlgItemText(IDC_LABEL13,				_T("Adjust error(%)"));
+		SetDlgItemText(IDC_CMD_MEASURE,				_T("Measure"));
+		SetDlgItemText(IDC_LABEL37,				_T("Measure Count(time)"));
+		SetDlgItemText(IDC_CMD_DROP_COUNTING,				_T("Drop Count Setting"));
+		SetDlgItemText(IDC_APD_REPORT,				_T("APD DATA Report OFF"));
+		SetDlgItemText(IDC_CMD_RETURN,				_T("Return"));
+	}
+
+	else if(pView->m_nLanguage == 2)	//ehji 140309
+	{
+		SetDlgItemText(IDC_CMD_TITLE,				_T("ö´ïÒÐàÜÍïá"));
+		SetDlgItemText(IDC_CALIBRATION_APPLY,				_T("Calibration ß©â¦ö·ëëéÄ"));
+		SetDlgItemText(IDC_BAL_MODE_SET,				_T("BALANCE MODE : ïáßÈ"));
+		SetDlgItemText(IDC_BALANCE_CAL,				_T("BALANCE Îèïá"));
+		SetDlgItemText(IDC_BTN_PUMP_INITIAL,				_T("PumpôøÑ¢ûù"));
+		SetDlgItemText(IDC_BTN_SEQ_INITIAL,				_T("ö´ïÒÌ¿ÍýÓñû¡úéãÆ"));
+		SetDlgItemText(IDC_CMD_ADJUST,				_T("÷ÎõóÕáðàïÚ"));
+		SetDlgItemText(IDC_LABEL13,				_T("Á¶Á¤ ¿ÀÂ÷(%)"));
+		SetDlgItemText(IDC_CMD_MEASURE,				_T("÷ÎõóÕáö´ïÒ"));
+		SetDlgItemText(IDC_LABEL37,				_T("ö´ïÒüÞâ¦£¨üÞ£©"));
+		SetDlgItemText(IDC_CMD_DROP_COUNTING,				_T("Drop Count Setting"));
+		SetDlgItemText(IDC_APD_REPORT,				_T("APD DATA ÜÃÍ± OFF"));
+		SetDlgItemText(IDC_CMD_RETURN,				_T("Ú÷üÞ"));
+	}
+}
+
+void CAdjust::OnClickNOffset() 
+{
+	// TODO: Add your control notification handler code here
+	CMainFrame *pFrame = (CMainFrame*)AfxGetMainWnd();
+	CP8CA_LcDispView* pView = (CP8CA_LcDispView*)pFrame->GetActiveView();	
+
+	pView->bModuleInfoStatus = FALSE; 
+
+	CModuleInfo dlg;
+	dlg.DoModal();
+}
+
+void CAdjust::SubSectionCalibResult(int r, int c)
+{
+	CMainFrame* pFrame = (CMainFrame*)AfxGetMainWnd();
+	CP8CA_LcDispView* pView = (CP8CA_LcDispView*)pFrame->GetActiveView();
+	CP8CA_LcDispDoc* pDoc = (CP8CA_LcDispDoc *)pFrame->GetActiveDocument();
+
+	CString str = "";
+	int i=0 , j=0;
+	double dCalibError = 0.0;
+	double dCalibWeight = 0.0;
+	long temp=0;
+	double Result=0;
+	int nTotalWeight=0;
+	int nTempRaw = 0;
+	double dTempCalWeight = 0.0;
+	double dRefTarget[MAX_NOZZLE]= {0.0,};
+
+	for (i = 0 ; i< MAX_NOZZLE; i++) 
+		dRefTarget[i] = pDoc->m_structAdjustCondition.dTargetWeight[i] * pDoc->m_structAdjustCondition.nDropCount[i] * 1.2;
+
+	if(pDoc->m_structDataEditor.m_nCalibrationMode == 4)
+		nTempRaw = pDoc->m_structDataEditor.m_nMaxLineDropBlockNum;
+	else if(pDoc->m_structDataEditor.m_nCalibrationMode == 5)
+		nTempRaw = 1;
+	
+	m_ctrlVolCalibResult1.ShowWindow(SW_HIDE);
+	for (i = 0 ; i< MAX_NOZZLE/2; i++) 
+	{
+		for(j=0 ; j<nTempRaw; j++) 
+		{
+			m_ctrlVolCalibResult1.SetRow(j);
+			if(pDoc->m_structDataEditor.m_nCalibrationMode == 1)
+				m_ctrlVolCalibResult1.SetCol(i+2);
+			else
+				m_ctrlVolCalibResult1.SetCol(i+1);				
+			m_ctrlVolCalibResult1.SetCellBackColor(WHITE);
+		}
+	}
+
+	for (i = 0 ; i< MAX_NOZZLE/2; i++) 
+	{
+		for(j=0 ; j<nTempRaw; j++) 
+		{
+			m_ctrlVolCalibResult1.SetRow(j);
+			if(pDoc->m_structDataEditor.m_nCalibrationMode == 1)
+				m_ctrlVolCalibResult1.SetCol(i+2);
+			else
+				m_ctrlVolCalibResult1.SetCol(i+1);
+			m_ctrlVolCalibResult1.SetCellFontSize(12);
+		}
+	}
+
+	m_ctrlVolCalibResult1.SetColWidth(0,2100);
+	m_ctrlVolCalibResult1.SetColWidth(1,1000);
+	m_ctrlVolCalibResult1.SetRowHeight(0,800);
+	
+	for(j=0 ; j<nTempRaw; j++) 
+	{
+		if(pDoc->m_structDataEditor.m_nCalibrationMode == 4)
+			str.Format("Block#%02d",j+1);
+		else if(pDoc->m_structDataEditor.m_nCalibrationMode == 5)
+			str.Format("Block 1st");
+		m_ctrlVolCalibResult1.SetTextMatrix(j,0,str);
+	}
+	for (i = 0 ; i< m_ctrlVolCalibResult1.GetCols(); i++) 
+		m_ctrlVolCalibResult1.SetColAlignment(i,4);
+
+	for (i = 0 ; i< MAX_NOZZLE/2; i++) 
+	{
+		m_ctrlVolCalibResult1.SetColWidth(i+1,1210);
+		for(j=0 ; j<nTempRaw; j++) 
+		{
+			m_ctrlVolCalibResult1.SetRowHeight(j,1200);
+		}
+	}
+
+
+	if(c == 0)
+	{
+		for (i = 0 ; i< MAX_NOZZLE/2; i++) 
+		{
+			for(j=0 ; j<nTempRaw; j++) 
+			{
+				if(pDoc->m_structDataEditor.m_nCalibrationMode == 4)
+					str.Format("%.3f  /  %.0f",pDoc->m_structCalibData[i].dMeasureSection[j][0],pDoc->m_structCalibData[i].dMeasureSection[j][1]);
+				else if(pDoc->m_structDataEditor.m_nCalibrationMode == 5)
+					str.Format("%.3f  /  %.0f",pDoc->m_structCalibData[i].dMeasureFirstSection[j][0],pDoc->m_structCalibData[i].dMeasureFirstSection[j][1]);
+				
+				m_ctrlVolCalibResult1.SetRow(j);				
+				m_ctrlVolCalibResult1.SetCol((MAX_NOZZLE/2-i));
+				m_ctrlVolCalibResult1.SetTextMatrix(j, (MAX_NOZZLE/2-i) ,(LPCSTR)str);
+				
+				if(pView->m_nCalibUpDate3[i][j] <= 0)
+				{
+					m_ctrlVolCalibResult1.SetCellBackColor(WHITE);
+				}
+				else
+				{					
+					if(pDoc->m_structDataEditor.m_nCalibrationMode == 4)
+						dTempCalWeight = pDoc->m_structCalibData[i].dMeasureSection[j][0];
+					else if(pDoc->m_structDataEditor.m_nCalibrationMode == 5)
+						dTempCalWeight = pDoc->m_structCalibData[i].dMeasureFirstSection[j][0];
+					
+					if(!pView->Judgement(dTempCalWeight, (dRefTarget[i]*(j+1)), pDoc->m_structAdjustCondition.dCalibrationInterlock))
+					{
+						m_ctrlVolCalibResult1.SetCellBackColor(RED);
+						g_bCalibrationStatus[i] = FALSE; 
+					}
+					else
+					{
+						m_ctrlVolCalibResult1.SetCellBackColor(YELLOW);					
+					}
+				}
+			}
+		}
+	}
+	else if(c==8)
+	{
+		for(i = MAX_NOZZLE/2 ; i< MAX_NOZZLE; i++)
+		{
+			for(j=0 ; j<nTempRaw; j++) 
+			{
+				if(pDoc->m_structDataEditor.m_nCalibrationMode == 4)
+					str.Format("%.3f  /  %.0f",pDoc->m_structCalibData[i].dMeasureSection[j][0],pDoc->m_structCalibData[i].dMeasureSection[j][1]);
+				else if(pDoc->m_structDataEditor.m_nCalibrationMode == 5)
+					str.Format("%.3f  /  %.0f",pDoc->m_structCalibData[i].dMeasureFirstSection[j][0],pDoc->m_structCalibData[i].dMeasureFirstSection[j][1]);
+
+				m_ctrlVolCalibResult1.SetRow(j);				
+				m_ctrlVolCalibResult1.SetCol((MAX_NOZZLE-i));
+				m_ctrlVolCalibResult1.SetTextMatrix(j, (MAX_NOZZLE-i) ,(LPCSTR)str);
+				
+				if(pView->m_nCalibUpDate3[i][j] <= 0)
+				{
+					m_ctrlVolCalibResult1.SetCellBackColor(WHITE);
+				}
+				else
+				{
+					if(pDoc->m_structDataEditor.m_nCalibrationMode == 4)
+						dTempCalWeight = pDoc->m_structCalibData[i].dMeasureSection[j][0];
+					else if(pDoc->m_structDataEditor.m_nCalibrationMode == 5)
+						dTempCalWeight = pDoc->m_structCalibData[i].dMeasureFirstSection[j][0];
+					
+					if(!pView->Judgement(dTempCalWeight, (dRefTarget[i]*(j+1)), pDoc->m_structAdjustCondition.dCalibrationInterlock))
+					{
+						m_ctrlVolCalibResult1.SetCellBackColor(RED);
+						g_bCalibrationStatus[i] = FALSE; 
+					}
+					else
+					{
+						m_ctrlVolCalibResult1.SetCellBackColor(YELLOW);					
+					}
+				}
+			}
+		}		
+	}
+	m_ctrlVolCalibResult1.ShowWindow(SW_SHOW);
+}

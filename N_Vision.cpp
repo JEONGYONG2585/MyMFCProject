@@ -1,0 +1,1701 @@
+ // N_Vision.cpp: implementation of the CN_Vision class.
+//
+//////////////////////////////////////////////////////////////////////
+
+#include "stdafx.h"
+#include "p8ca_lcdisp.h"
+#include "MainFrm.h"
+//#include "P8CA_LcDispView.h"
+//#include "P8CA_LcDispDoc.h"
+#include "N_Vision.h"
+#include "TopEngCommLibExt_Client.h"
+
+#ifdef _DEBUG
+#undef THIS_FILE
+static char THIS_FILE[]=__FILE__;
+#define new DEBUG_NEW
+#endif
+#define MAX_RCV_MSG	16
+
+#if _SCAN
+#define DIRECTORY_LC	"Z:\\N_VISION"
+#define DIRECTORY_SEAL	"Z:\\SEAL_VISION"
+#else
+#define DIRECTORY_LC	"D:\\TOP\\N_VISION" //노트북 TEST 시 경로
+#define DIRECTORY_SEAL	"Z:\\TOP\\SEAL_VISION"
+#endif
+
+CString g_strRcv_Sub;
+CString g_strRcv_Cont;
+BOOL g_bRcvMsg;
+CN_Vision _NVision; 
+extern CString g_strLogPath;
+extern int g_nLn;					//JYKIM 161129 PART SCAN 글로벌 변수 선언 180K
+extern int g_nTotalLinecount;		//JYKIM 161129 PART SCAN 글로벌 변수 선언 180K
+//////////////////////////////////////////////////////////////////////
+// Construction/Destruction
+//////////////////////////////////////////////////////////////////////
+
+// 20121205 by hdoh vision
+// Server 측으로 부터 Msg 를 수신할 함수.
+// 함수 명은 바뀌어도 상관 없으나, 함수형은 유지되야함.
+void __stdcall Func_RcvMsg(char* chMsg, int iArrCnt)
+{
+	// Server 측으로 부터 Msg 를 수신한다.
+	//CString strTmp = _T("");
+	CString str;
+	str.Format("%s", chMsg);
+
+	_NVision.GetMsg_from_Vision(str);
+	g_bRcvMsg = TRUE;
+	//g_strCommDllRcv = strTmp);
+}
+
+// 20121205 by hdoh vision
+// Server 와 연결 해제 상태를 수신할 함수.
+// 함수 명은 바뀌어도 상관 없으나, 함수형은 유지되야함.
+void __stdcall Func_RcvDisconnect(void)
+{
+	// Server 와 연결 해제된 상태를 수신한다.
+	TRACE(_T("Disconnet"));
+}
+
+CN_Vision::CN_Vision()
+{
+	wMinute = 0;
+	wSec = 0;
+	wMSec = 0;
+	nCount = 0;
+	g_bRcvMsg = FALSE;
+	m_bLC_Mode = TRUE;
+}
+
+CN_Vision::~CN_Vision()
+{
+
+}
+
+int CN_Vision::CommLibEngineStart(BOOL bStart)
+{
+	int iRetVal = 0;
+	
+	// Key 값은 TopEng 로 고정되어 있음.
+	char chKeyTmp[] = {"TopEng"};
+	if (bStart)
+	{
+		iRetVal = TopEngCommClient_EngineStart(chKeyTmp, true, Func_RcvMsg, Func_RcvDisconnect);
+		if (iRetVal == 0)
+		{
+			TRACE("Client Engine Start 성공.\n");
+		}
+		else
+		{
+			TRACE("Client Engine Start 실패.\n");
+			AfxMessageBox("Client Engine Start 실패.");
+		}
+	}
+	else
+	{
+		iRetVal = TopEngCommClient_EngineStart(chKeyTmp, false, NULL, NULL);
+		TRACE("Client Engine Stop.\n");
+	}
+	
+	return iRetVal;
+}
+
+// 20121205 by hdoh vision
+int CN_Vision::CommLibOpenPort() 
+{
+	char chIP[] = {"192.168.0.1"};
+	int iPort = 50000;
+	
+	// Port 를 연다.
+	int iRetVal = TopEngCommClient_OpenPort(chIP, iPort);
+	
+ 	if (iRetVal != 0)
+ 	{
+ 		AfxMessageBox("Port Open 실패.");
+ 	}
+	return iRetVal;
+}
+
+int CN_Vision::CommLibClosePort()
+{
+	return TopEngCommClient_ClosePort();
+}
+// 20121205 by hdoh vision
+int CN_Vision::CommLibMsgSend(CString strMsgTmp) 
+{
+	// string 형태 메세지를 송신한다.
+	//CString strMsgTmp = _T("");
+	g_bRcvMsg = FALSE;
+	int iLengTmp = strMsgTmp.GetLength();
+	if (iLengTmp <1) return FALSE;
+	
+	
+	char* chMsg = new char[iLengTmp+1];
+	memset(chMsg, 0, sizeof(char) * (iLengTmp+1));
+	strncpy(chMsg, strMsgTmp, iLengTmp);
+	
+	// 3번째 인수 TimeOut 의 Default 는 1500ms 한다.
+	// 필요시(string 이 상당히 길 경우) 값을 조정한다.
+	int iRetVal = TopEngCommClient_SendMsg_String(chMsg, iLengTmp, 3000);
+
+#if !_SCAN
+	iRetVal = 0;
+#endif
+	
+	if (iRetVal !=0)
+	{
+		TRACE("Msg Send 실패.");
+	}
+	else
+	{
+		TRACE("Msg Send 성공.\n");
+	}
+	
+	delete[] chMsg;
+	return iRetVal;
+}
+
+void CN_Vision::Cal_Time()
+{
+	SYSTEMTIME lt;
+	::GetLocalTime(&lt);
+
+	if(wMinute == lt.wMinute)
+	{
+		if(wSec == lt.wSecond)
+		{
+			if(wMSec == lt.wMilliseconds)
+			{
+				nCount++;
+			}
+			else
+			{
+				wMSec = lt.wMilliseconds;
+				nCount = 0; 
+			}
+		}
+		else
+		{
+			wSec = lt.wSecond;
+			nCount = 0; 
+		}
+	}
+	else
+	{
+		wMinute = lt.wMinute;
+		nCount = 0; 
+	}
+}
+
+BOOL CN_Vision::Write_CSV_File(int nKind)
+{
+//	CMainFrame* pFrame = (CMainFrame*)AfxGetMainWnd();
+//	CP8CA_LcDispDoc* pDoc = (CP8CA_LcDispDoc *)pFrame->GetActiveDocument();
+	CString strPath;
+	CString strDirName, str, str1, strLog;
+	CFileFind filefind;
+	FILE *fp;
+	BOOL bContinue = TRUE;
+	BOOL bIsDir = FALSE;
+	int i = 0, j = 0;
+	bContinue = filefind.FindFile("Z:\\*.*");
+	while(bContinue)
+	{
+		bContinue = filefind.FindNextFile();
+		if(filefind.IsDirectory())
+		{
+			strDirName = filefind.GetFileName();
+			if(m_bLC_Mode == _SEAL)
+			{
+				if(strDirName == "SEAL_VISION")
+				{
+					bIsDir = TRUE;
+					break;
+				}
+			}
+			else
+			{
+				if(strDirName == "N_VISION")
+				{
+					bIsDir = TRUE;
+					break;
+				}
+			}
+		}
+	}
+	
+	filefind.Close();
+	
+	if(!bIsDir) m_bLC_Mode == _SEAL ? _mkdir(DIRECTORY_SEAL) : _mkdir(DIRECTORY_LC);
+
+	switch (nKind)
+	{
+		case _CSV_CELL_INFO: strPath.Format("%s\\CELL_INFO.csv", (m_bLC_Mode == _SEAL ? DIRECTORY_SEAL : DIRECTORY_LC));
+			break;
+//161214 VISION PART SCAN
+		case _CSV_CELL_INFO_N_GANTRY:  
+			strPath.Format("%s\\CELL_INFO_N_GENTRY.csv", (m_bLC_Mode == _SEAL ? DIRECTORY_SEAL : DIRECTORY_LC));
+			break; 
+		case _CSV_RECIPE_INFO: strPath.Format("%s\\RECIPE_INFO.csv", m_bLC_Mode == _SEAL ? DIRECTORY_SEAL : DIRECTORY_LC);
+			break;
+		case _CSV_ADDDEL_INFO: strPath.Format("%s\\ADD_DEL_OX_INFO.csv", m_bLC_Mode == _SEAL ? DIRECTORY_SEAL : DIRECTORY_LC);
+			break;
+		case _CSV_ALIGN_INFO: strPath.Format("%s\\ALIGN_INFO.csv", m_bLC_Mode == _SEAL ? DIRECTORY_SEAL : DIRECTORY_LC);
+			break;
+		case _CSV_SCAN_INFO: strPath.Format("%s\\SCAN_INFO.csv", m_bLC_Mode == _SEAL ? DIRECTORY_SEAL : DIRECTORY_LC);
+			break;
+//160903 DUAL INTENSITY //160929 JYKIM
+		case _CSV_THRESHOLD_INFO: strPath.Format("%s\\THRESHOLD_INFO.csv", m_bLC_Mode == _SEAL ? DIRECTORY_SEAL : DIRECTORY_LC);
+			break;
+		default: return FALSE;
+	}
+	
+	fp = fopen((char *)(LPCSTR)strPath, "wt");
+
+	if(fp == NULL) return FALSE;
+ 
+	if(nKind == _CSV_CELL_INFO)
+	{
+		if(m_bLC_Mode == _SEAL)
+		{
+			fprintf(fp, "%d,%d,%d\n", m_structCell_Info_Seal.m_nCell_Count, m_structCell_Info_Seal.m_nDummy_Count, m_structCell_Info_Seal.m_nAu_Count);
+			for(i = 0; i < m_structCell_Info_Seal.m_nCell_Count; i++)
+			{
+				str.Format("%d,%d,%d,%.3f,%.3f\n", i+1, m_structCell_Info_Seal.m_nLine_Count_Cell[i], m_structCell_Info_Seal.m_nCorner_Count_Cell[i], m_structCell_Info_Seal.m_dVertex_Area_Cell[i], m_structCell_Info_Seal.m_dSearch_Area_Cell[i]);
+				fprintf(fp, "%s", str);
+				str.Format("%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%d\n", m_structCell_Info_Seal.m_dMax_Line_Width_Cell[i], m_structCell_Info_Seal.m_dMin_Line_Width_Cell[i], m_structCell_Info_Seal.m_dMax_Corner_Width_Cell[i],
+					m_structCell_Info_Seal.m_dMin_Corner_Width_Cell[i], m_structCell_Info_Seal.m_dMax_Overlap_Width_Cell[i], m_structCell_Info_Seal.m_dMin_Overlap_Width_Cell[i], m_structCell_Info_Seal.m_nCorner_Divid_Cell[i]);
+				fprintf(fp, "%s", str);
+				for(j = 0; j < m_structCell_Info_Seal.m_nLine_Count_Cell[i]; j++)
+				{
+					str.Format("%d,%.3f,%.3f,%.3f,%.3f,%.3f\n", j+1,m_structCell_Info_Seal.m_dStart_X_Cell[i][j],m_structCell_Info_Seal.m_dStart_Y_Cell[i][j],m_structCell_Info_Seal.m_dEnd_X_Cell[i][j], m_structCell_Info_Seal.m_dEnd_Y_Cell[i][j], m_structCell_Info_Seal.m_dRadius_Cell[i][j]);
+					fprintf(fp, "%s", str);
+				}
+			}
+			for(i = 0; i < m_structCell_Info_Seal.m_nDummy_Count; i++)
+			{
+				str.Format("%d,%d,%d,%.3f,%.3f,%.3f,%.3f\n", i+1, m_structCell_Info_Seal.m_nLine_Count_Dummy[i], m_structCell_Info_Seal.m_nCorner_Count_Dummy[i], m_structCell_Info_Seal.m_dVertex_Area_Dummy[i], m_structCell_Info_Seal.m_dSearch_Area_Dummy[i],
+					m_structCell_Info_Seal.m_dStart_Error_Dummy[i], m_structCell_Info_Seal.m_dEnd_Error_Dummy[i]);
+				fprintf(fp, "%s", str);
+				str.Format("%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%d\n", m_structCell_Info_Seal.m_dMax_Line_Width_Dummy[i], m_structCell_Info_Seal.m_dMin_Line_Width_Dummy[i], m_structCell_Info_Seal.m_dMax_Corner_Width_Dummy[i],
+					m_structCell_Info_Seal.m_dMin_Corner_Width_Dummy[i], m_structCell_Info_Seal.m_dMax_Overlap_Width_Dummy[i], m_structCell_Info_Seal.m_dMin_Overlap_Width_Dummy[i], m_structCell_Info_Seal.m_nCorner_Divid_Dummy[i]);
+				fprintf(fp, "%s", str);
+				for(j = 0; j < m_structCell_Info_Seal.m_nLine_Count_Dummy[i]; j++)
+				{
+					str.Format("%d,%.3f,%.3f,%.3f,%.3f,%.3f\n", j+1,m_structCell_Info_Seal.m_dStart_X_Dummy[i][j],m_structCell_Info_Seal.m_dStart_Y_Dummy[i][j],m_structCell_Info_Seal.m_dEnd_X_Dummy[i][j], m_structCell_Info_Seal.m_dEnd_Y_Dummy[i][j], m_structCell_Info_Seal.m_dRadius_Dummy[i][j]);
+					fprintf(fp, "%s", str);
+				}
+			}
+			for(i = 0; i < m_structCell_Info_Seal.m_nAu_Count; i++)
+			{
+				str.Format("%d,%.3f,%.3f,%.3f,%.3f\n", i+1, m_structCell_Info_Seal.m_dX_Point_Au[i], m_structCell_Info_Seal.m_dY_Point_Au[i], m_structCell_Info_Seal.m_dX_Search_Area_Au[i], m_structCell_Info_Seal.m_dY_Search_Area_Au[i]);
+				fprintf(fp, "%s", str);
+				str.Format("%.3f,%.3f,%.3f,%.3f\n", m_structCell_Info_Seal.m_dMax_Dia_X_Au[i], m_structCell_Info_Seal.m_dMin_Dia_X_Au[i], m_structCell_Info_Seal.m_dMax_Dia_Y_Au[i], m_structCell_Info_Seal.m_dMin_Dia_Y_Au[i]);
+				fprintf(fp, "%s", str);
+			}
+		}
+		else 
+		{
+			fprintf(fp, "%d\n", m_nCellCount);
+			for(i = 0; i < m_nCellCount; i++)
+			{
+				str.Format("%d,%d,%d,%d,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f", i+1, m_structCell_Info_Lc.m_nDrop_Count[i], m_structCell_Info_Lc.m_nLine_Count[i], m_structCell_Info_Lc.m_nDrop_Count_Y[i], 
+					m_structCell_Info_Lc.m_dStart_X[i], m_structCell_Info_Lc.m_dStart_Y[i], m_structCell_Info_Lc.m_dEnd_X[i], m_structCell_Info_Lc.m_dEnd_Y[i],
+					m_structCell_Info_Lc.m_dSealLine_Start_X[i], m_structCell_Info_Lc.m_dSealLine_Start_Y[i], m_structCell_Info_Lc.m_dSealLine_End_X[i], m_structCell_Info_Lc.m_dSealLine_End_Y[i]);
+				fprintf(fp, "%s\n", str);
+				str.Empty();
+				for(j = 0; j < MAX_NOZZLE; j++)
+				{
+					str1.Format("%d,",m_structCell_Info_Lc.m_nHead_Line[i][j]);
+					str+=str1;
+				}
+				str.Delete(str.GetLength()-1,1);
+				fprintf(fp, "%s\n", str);
+				for(j = 0; j < m_structCell_Info_Lc.m_nLine_Count[i]; j++)
+				{
+					str.Format("%d,%.3f,%.3f", j+1,m_structCell_Info_Lc.m_dX_Center_Pos[i][j],m_structCell_Info_Lc.m_dLine_Y[i][j]);
+					fprintf(fp, "%s\n", str);
+				}
+			}
+		}
+	}
+//////////////////////////////////////////////jykim 161219 PART SCAN CELL_INFO 파일 쓰기 180K
+	else if(nKind == _CSV_CELL_INFO_N_GANTRY)
+	{
+		if(m_bLC_Mode == _SEAL)
+		{
+			fprintf(fp, "%d,%d,%d\n", m_structCell_Info_Seal.m_nCell_Count, m_structCell_Info_Seal.m_nDummy_Count, m_structCell_Info_Seal.m_nAu_Count);
+			for(i = 0; i < m_structCell_Info_Seal.m_nCell_Count; i++)
+			{
+				str.Format("%d,%d,%d,%.3f,%.3f\n", i+1, m_structCell_Info_Seal.m_nLine_Count_Cell[i], m_structCell_Info_Seal.m_nCorner_Count_Cell[i], m_structCell_Info_Seal.m_dVertex_Area_Cell[i], m_structCell_Info_Seal.m_dSearch_Area_Cell[i]);
+				fprintf(fp, "%s", str);
+				str.Format("%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%d\n", m_structCell_Info_Seal.m_dMax_Line_Width_Cell[i], m_structCell_Info_Seal.m_dMin_Line_Width_Cell[i], m_structCell_Info_Seal.m_dMax_Corner_Width_Cell[i],
+					m_structCell_Info_Seal.m_dMin_Corner_Width_Cell[i], m_structCell_Info_Seal.m_dMax_Overlap_Width_Cell[i], m_structCell_Info_Seal.m_dMin_Overlap_Width_Cell[i], m_structCell_Info_Seal.m_nCorner_Divid_Cell[i]);
+				fprintf(fp, "%s", str);
+				for(j = 0; j < m_structCell_Info_Seal.m_nLine_Count_Cell[i]; j++)
+				{
+					str.Format("%d,%.3f,%.3f,%.3f,%.3f,%.3f\n", j+1,m_structCell_Info_Seal.m_dStart_X_Cell[i][j],m_structCell_Info_Seal.m_dStart_Y_Cell[i][j],m_structCell_Info_Seal.m_dEnd_X_Cell[i][j], m_structCell_Info_Seal.m_dEnd_Y_Cell[i][j], m_structCell_Info_Seal.m_dRadius_Cell[i][j]);
+					fprintf(fp, "%s", str);
+				}
+			}
+			for(i = 0; i < m_structCell_Info_Seal.m_nDummy_Count; i++)
+			{
+				str.Format("%d,%d,%d,%.3f,%.3f,%.3f,%.3f\n", i+1, m_structCell_Info_Seal.m_nLine_Count_Dummy[i], m_structCell_Info_Seal.m_nCorner_Count_Dummy[i], m_structCell_Info_Seal.m_dVertex_Area_Dummy[i], m_structCell_Info_Seal.m_dSearch_Area_Dummy[i],
+					m_structCell_Info_Seal.m_dStart_Error_Dummy[i], m_structCell_Info_Seal.m_dEnd_Error_Dummy[i]);
+				fprintf(fp, "%s", str);
+				str.Format("%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%d\n", m_structCell_Info_Seal.m_dMax_Line_Width_Dummy[i], m_structCell_Info_Seal.m_dMin_Line_Width_Dummy[i], m_structCell_Info_Seal.m_dMax_Corner_Width_Dummy[i],
+					m_structCell_Info_Seal.m_dMin_Corner_Width_Dummy[i], m_structCell_Info_Seal.m_dMax_Overlap_Width_Dummy[i], m_structCell_Info_Seal.m_dMin_Overlap_Width_Dummy[i], m_structCell_Info_Seal.m_nCorner_Divid_Dummy[i]);
+				fprintf(fp, "%s", str);
+				for(j = 0; j < m_structCell_Info_Seal.m_nLine_Count_Dummy[i]; j++)
+				{
+					str.Format("%d,%.3f,%.3f,%.3f,%.3f,%.3f\n", j+1,m_structCell_Info_Seal.m_dStart_X_Dummy[i][j],m_structCell_Info_Seal.m_dStart_Y_Dummy[i][j],m_structCell_Info_Seal.m_dEnd_X_Dummy[i][j], m_structCell_Info_Seal.m_dEnd_Y_Dummy[i][j], m_structCell_Info_Seal.m_dRadius_Dummy[i][j]);
+					fprintf(fp, "%s", str);
+				}
+			}
+			for(i = 0; i < m_structCell_Info_Seal.m_nAu_Count; i++)
+			{
+				str.Format("%d,%.3f,%.3f,%.3f,%.3f\n", i+1, m_structCell_Info_Seal.m_dX_Point_Au[i], m_structCell_Info_Seal.m_dY_Point_Au[i], m_structCell_Info_Seal.m_dX_Search_Area_Au[i], m_structCell_Info_Seal.m_dY_Search_Area_Au[i]);
+				fprintf(fp, "%s", str);
+				str.Format("%.3f,%.3f,%.3f,%.3f\n", m_structCell_Info_Seal.m_dMax_Dia_X_Au[i], m_structCell_Info_Seal.m_dMin_Dia_X_Au[i], m_structCell_Info_Seal.m_dMax_Dia_Y_Au[i], m_structCell_Info_Seal.m_dMin_Dia_Y_Au[i]);
+				fprintf(fp, "%s", str);
+			}
+		}
+		else
+		{
+//			fprintf(fp, "%d\n", m_nCellCount);
+			fprintf(fp, "%d,1\n", m_nCellCount);
+			for(i = 0; i < m_nCellCount; i++)
+			{
+				str.Format("%d,%d,%d,%d,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f", i+1, m_structCell_Info_Lc.m_nDrop_Count[i], m_structCell_Info_Lc.m_nLine_Count[i], m_structCell_Info_Lc.m_nDrop_Count_Y[i], 
+					m_structCell_Info_Lc.m_dStart_X[i], m_structCell_Info_Lc.m_dStart_Y[i], m_structCell_Info_Lc.m_dEnd_X[i], m_structCell_Info_Lc.m_dEnd_Y[i],
+					m_structCell_Info_Lc.m_dSealLine_Start_X[i], m_structCell_Info_Lc.m_dSealLine_Start_Y[i], m_structCell_Info_Lc.m_dSealLine_End_X[i], m_structCell_Info_Lc.m_dSealLine_End_Y[i]);
+				fprintf(fp, "%s\n", str);
+				str.Empty();
+				for(j = 0; j < MAX_NOZZLE; j++)
+				{
+					str1.Format("%d,",m_structCell_Info_Lc.m_nHead_Line[i][j]);
+					str+=str1;
+				}
+				str.Delete(str.GetLength()-1,1);
+				fprintf(fp, "%s\n", str);
+				for(j = 0; j < m_structCell_Info_Lc.m_nLine_Count[i]; j++)
+				{
+//161214 VISION PART SCAN
+					str.Format("%d,%.3f,%.3f,%d,%d,%d,%d"
+						, j+1, m_structCell_Info_Lc.m_dX_Center_Pos[i][j], m_structCell_Info_Lc.m_dLine_Y[i][j]
+						, _NVision.m_structCell_Info_Lc.m_nPointHeadInform[i][j],  _NVision.m_structCell_Info_Lc.m_nPointYshotInform[i][j], 0, 0);
+					fprintf(fp, "%s\n", str);
+				}
+			}
+		}
+	}
+//////////////////////////////////////////////
+	else if(nKind == _CSV_RECIPE_INFO)
+	{
+		if(m_bLC_Mode == _SEAL)
+		{
+			fprintf(fp, "%s,%s\n", m_structRecipe_Info_Seal.m_strRecipe_No, m_structRecipe_Info_Seal.m_strRecipe_Name);
+			fprintf(fp, "%.3f,%.3f\n", m_structRecipe_Info_Seal.m_dGlass_Size_X, m_structRecipe_Info_Seal.m_dGlass_Size_Y);
+			fprintf(fp, "%.3f,%.3f\n", m_structRecipe_Info_Seal.m_dPos_Accu_Permit_X, m_structRecipe_Info_Seal.m_dPos_Accu_Permit_Y);
+			fprintf(fp, "%d,%d\n", m_structRecipe_Info_Seal.m_nIntensity_Line, m_structRecipe_Info_Seal.m_nIntensity_Part);
+			fprintf(fp, "%.3f,%.3f\n", m_structRecipe_Info_Seal.m_dSize_X_Part, m_structRecipe_Info_Seal.m_dSize_Y_Part);
+			fprintf(fp, "%.3f,%.3f\n", m_structRecipe_Info_Seal.m_dWidth_Size, m_structRecipe_Info_Seal.m_dVertex_Size);
+			fprintf(fp, "%d,%.3f\n", m_structRecipe_Info_Seal.m_nEdge_Intnsity, m_structRecipe_Info_Seal.m_dEdge_Size);
+			fprintf(fp, "%d,%d\n", m_structRecipe_Info_Seal.m_bReverse, m_structRecipe_Info_Seal.m_bEdge_Reverse);
+			fprintf(fp, "%.3f,%.3f\n", m_structRecipe_Info_Seal.m_dBreak_Width, m_structRecipe_Info_Seal.m_dBreak_Dist);
+			fprintf(fp, "%d,%d\n", m_structRecipe_Info_Seal.m_nLight_Con,m_structRecipe_Info_Seal.m_nK_Vel);
+		}
+		else
+		{
+			fprintf(fp, "%s,%s\n", m_structRecipe_Info_Lc.m_strRecipe_No, m_structRecipe_Info_Lc.m_strRecipe_Name);
+			fprintf(fp, "%.3f,%.3f\n", m_structRecipe_Info_Lc.m_dGlass_Size_X, m_structRecipe_Info_Lc.m_dGlass_Size_Y);
+			fprintf(fp, "%d,%d\n", m_structRecipe_Info_Lc.m_nTotal_Permit_Over, m_structRecipe_Info_Lc.m_nTotal_Permit_Miss);
+			fprintf(fp, "%d,%d\n", m_structRecipe_Info_Lc.m_nCell_Permit_Over, m_structRecipe_Info_Lc.m_nCell_Permit_Miss);
+			fprintf(fp, "%d,%d\n", m_structRecipe_Info_Lc.m_nSeal_Permit_Over, m_structRecipe_Info_Lc.m_nGlass_Permit_Over);
+			fprintf(fp, "%.3f,%.3f\n", m_structRecipe_Info_Lc.m_dDist_Permit_X, m_structRecipe_Info_Lc.m_dDist_Permit_Y);
+			fprintf(fp, "%d,%d\n", m_structRecipe_Info_Lc.m_nIntensity[0], m_structRecipe_Info_Lc.m_nIntensity[1]); 
+			fprintf(fp, "%d,%d\n", m_structRecipe_Info_Lc.m_nIntensity[2], m_structRecipe_Info_Lc.m_nIntensity[3]);
+//			fprintf(fp, "%d,%d\n", m_structRecipe_Info_Lc.m_nIntensity[0],m_structRecipe_Info_Lc.m_nLight_Con);
+			fprintf(fp, "%d,%.3f\n", m_structRecipe_Info_Lc.m_nEdge_Intnsity, m_structRecipe_Info_Lc.m_dEdge_Size);
+			fprintf(fp, "%d,%.3f\n", m_structRecipe_Info_Lc.m_nNozzle_No, m_structRecipe_Info_Lc.m_dNozzle_Pitch);
+			fprintf(fp, "%.3f,%.3f\n", m_structRecipe_Info_Lc.m_dDrop_Size_X[0], m_structRecipe_Info_Lc.m_dDrop_Size_Y[0]);
+			fprintf(fp, "%.3f,%.3f\n", m_structRecipe_Info_Lc.m_dDrop_Size_X[1], m_structRecipe_Info_Lc.m_dDrop_Size_Y[1]);
+			fprintf(fp, "%.3f,%.3f\n", m_structRecipe_Info_Lc.m_dDrop_Size_X[2], m_structRecipe_Info_Lc.m_dDrop_Size_Y[2]);
+			fprintf(fp, "%.3f,%.3f\n", m_structRecipe_Info_Lc.m_dDrop_Size_X[3], m_structRecipe_Info_Lc.m_dDrop_Size_Y[3]);
+			fprintf(fp, "%d,%d\n", m_structRecipe_Info_Lc.m_bReverse, m_structRecipe_Info_Lc.m_bEdge_Reverse);
+			fprintf(fp, "%.3f,%d\n", m_structRecipe_Info_Lc.m_dCell_Rate, m_structRecipe_Info_Lc.m_nK_Vel);
+			fprintf(fp, "%.3f,%.3f\n", m_structRecipe_Info_Lc.m_dDrop_Close[0], m_structRecipe_Info_Lc.m_dDrop_Close[1]); 
+			fprintf(fp, "%.3f,%.3f\n", m_structRecipe_Info_Lc.m_dDrop_Close[2], 0);
+			fprintf(fp, "%d\n", m_structRecipe_Info_Lc.m_nLight_Con);
+
+//160909 DUAL INTENSITY 개선 //160929 JYKIM
+			fprintf(fp, "%d,%d\n", 0,0);
+			fprintf(fp, "%d,%d\n", 0,0);
+			fprintf(fp, "%d,%d\n", 0,0);
+			fprintf(fp, "%d,%d\n", 0,0);
+			fprintf(fp, "%d,%d\n", 0,0);
+			fprintf(fp, "%d,%d\n", 0,0);
+			fprintf(fp, "%d,%d\n", 0,0);
+			fprintf(fp, "%d,%d\n", 80,100);
+			fprintf(fp, "%d,%d\n", -1,-1);
+			fprintf(fp, "%d,%d\n", -1,-1);
+			fprintf(fp, "%d,%d\n", -1,-1);
+			fprintf(fp, "%d,%d\n", -1,-1);
+			fprintf(fp, "%d,%d\n", -1,-1);
+			fprintf(fp, "%d,%d\n", -1,-1);
+			fprintf(fp, "%d,%d\n", -1,-1);
+			fprintf(fp, "%d,%d\n", -1,-1);
+			fprintf(fp, "%d,%d\n", -1,-1);
+			fprintf(fp, "%d,%d\n", -1,-1);
+			fprintf(fp, "%d,%d\n", -1,-1);
+			fprintf(fp, "%d,%d\n", -1,-1);
+			fprintf(fp, "%d,%d\n", -1,-1);
+//220603 BIG DROP DETECT ( (OLD) DEEP DROP ) 
+//			fprintf(fp, "%d,%d\n", 0,-1);
+//			fprintf(fp, "%d,%d\n", -1,-1);
+			fprintf(fp, "%d,%d\n", 0,m_structRecipe_Info_Lc.m_nDetectBigDrop_Rate[0]);
+			fprintf(fp, "%d,%d\n", m_structRecipe_Info_Lc.m_nDetectBigDrop_Rate[1],m_structRecipe_Info_Lc.m_nDetectBigDrop_Rate[2]);
+			fprintf(fp, "%d,%d\n", m_structRecipe_Info_Lc.m_nDropSizeRate_X,_NVision.m_structRecipe_Info_Lc.m_nDropSizeRate_Y);
+//220603 BIG DROP DETECT ( (OLD) DEEP DROP ) 
+			fprintf(fp, "%d,%d\n", m_structRecipe_Info_Lc.m_bDualIntensity,0);
+		}
+	}
+	else if(nKind == _CSV_ADDDEL_INFO)
+	{
+		if(m_bLC_Mode == _LC)
+		{
+			fprintf(fp, "%d\n", m_nCellCount);
+			for(i = 0; i < m_nCellCount; i++)
+			{
+				m_structDrop_Info_Lc.m_bOx[i] ? str1 = "O" : str1 = "X";
+				str.Format("%d,%d,%s", i+1, m_structDrop_Info_Lc.m_nAdd_Del_Point[i],str1);
+				fprintf(fp, "%s\n", str);
+				for(j = 0; j < m_structDrop_Info_Lc.m_nAdd_Del_Point[i]; j++)
+				{
+					m_structDrop_Info_Lc.m_bAdd_Del[i][j] ? str1 = "ADD" : str1 = "DEL";
+					str.Format("%.3f,%.3f,%s", m_structDrop_Info_Lc.m_dAxis_X[i][j], m_structDrop_Info_Lc.m_dAxis_Y[i][j], str1);
+					fprintf(fp, "%s\n", str);
+				}
+			}
+		}
+	}
+	else if(nKind == _CSV_ALIGN_INFO)
+	{
+		fprintf(fp, "%.3f,%.3f\n", m_structAlign_Info.m_dOffset_X, m_structAlign_Info.m_dOffset_Y);
+	}
+	else if(nKind == _CSV_SCAN_INFO)
+	{
+//		if(!pDoc->m_structN_Vision.m_bPartScanMode)
+//			fprintf(fp, "%s,%.3f,%.3f,%d\n", (m_structScan_Info.m_bDir_TTB ? "TTB" : "BTT"), m_structScan_Info.m_dDistance, m_structScan_Info.m_dStartPos, m_structScan_Info.m_nPartScanmode);
+//		else
+			fprintf(fp, "%s,%.3f,%.3f,%d,%d,%d\n", (m_structScan_Info.m_bDir_TTB ? "TTB" : "BTT"), m_structScan_Info.m_dDistance, m_structScan_Info.m_dStartPos, m_structScan_Info.m_nPartScanmode, 2, m_structScan_Info.m_bScanDirection); //JYKIM 161129 PART SCAN scaninfo 변수 추가 180K
+//		fprintf(fp, "%s,%.3f,%.3f\n", (m_structScan_Info.m_bDir_TTB ? "BTT" : "TTB"), m_structScan_Info.m_dDistance, m_structScan_Info.m_dStartPos);
+	}
+//160903 DUAL INTENSITY //160929 JYKIM
+	else if(nKind == _CSV_THRESHOLD_INFO)
+	{
+		fprintf(fp, "0,%d,%d,%.3f,%.3f,%.3f,%.3f\n" , m_structThreshold_Info.m_nIntensityLow[0]    , m_structThreshold_Info.m_nIntensityHigh[0]
+						 						    , m_structThreshold_Info.m_dDrop_Size_X_Low[0] , m_structThreshold_Info.m_dDrop_Size_Y_Low[0]
+													, m_structThreshold_Info.m_dDrop_Size_X_High[0], m_structThreshold_Info.m_dDrop_Size_Y_High[0]);
+
+		fprintf(fp, "1,%d,%d,%.3f,%.3f,%.3f,%.3f\n" , m_structThreshold_Info.m_nIntensityLow[1]    , m_structThreshold_Info.m_nIntensityHigh[1]
+						 						    , m_structThreshold_Info.m_dDrop_Size_X_Low[1] , m_structThreshold_Info.m_dDrop_Size_Y_Low[1]
+													, m_structThreshold_Info.m_dDrop_Size_X_High[1], m_structThreshold_Info.m_dDrop_Size_Y_High[1]);
+
+		fprintf(fp, "2,%d,%d,%.3f,%.3f,%.3f,%.3f\n" , m_structThreshold_Info.m_nIntensityLow[2]    , m_structThreshold_Info.m_nIntensityHigh[2]
+						 						    , m_structThreshold_Info.m_dDrop_Size_X_Low[2] , m_structThreshold_Info.m_dDrop_Size_Y_Low[2]
+													, m_structThreshold_Info.m_dDrop_Size_X_High[2], m_structThreshold_Info.m_dDrop_Size_Y_High[2]);
+
+		fprintf(fp, "3,%d,%d,%.3f,%.3f,%.3f,%.3f\n" , 30   , 30
+						 						    , 3.0  , 3.0
+													, 5.0  , 5.0 );
+	}
+	fclose(fp);
+	strLog.Format("<Write File>\t\t%s", strPath);
+	Save_Vision_Log(strLog);
+	return TRUE;
+}
+
+int CN_Vision::Read_CSV_File(int nKind)                                    // Return 값 정의
+{																		   // 0 -> OK
+//	CMainFrame* pFrame = (CMainFrame*)AfxGetMainWnd();					   // 1 -> 찾는 File 이 없음
+//	CP8CA_LcDispDoc* pDoc = (CP8CA_LcDispDoc *)pFrame->GetActiveDocument();// 2 -> 약속되지 않은 File 을 읽어오라고 명령
+																		   // 3 -> Vision Result에서 OK가 아님 //jykim 171218 VisionAlarm구분 정상화
+	CFileFind fileFind;													   // 4 -> File 에서 읽은 CELL 개수가 안 맞음
+	CString strTemp, strPath, strFilePath, strDirName;					   // 5 -> Cell 배열 순서가 틀림 ( 1,2,3,4 순서가 아님 )
+	CString strLog;
+	BOOL bContinue = TRUE;
+	int nRet = _RESULT_ERR_NOTHING;
+
+	switch (nKind)
+	{
+		case _CSV_COUNT_RESULT: strTemp = "DROP_COUNT_RESULT.csv";
+			break;
+		case _CSV_INSP_RESULT: strTemp = "LINE_INSP_RESULT.csv";
+			break;
+		default: //jykim 171218 VisionAlarm구분 정상화
+		{
+			strLog.Format("<Read_CSV_File(CString strFileName, int nKind)> Return Code _RESULT_ERR_READ(2)");
+			Save_Vision_Log(strLog);
+			return _RESULT_ERR_READ; 	
+		}
+	}
+
+	strPath.Format("%s\\", (m_bLC_Mode == _SEAL ? DIRECTORY_SEAL : DIRECTORY_LC));
+	
+	strFilePath.Format("%s\\*.csv*", strPath);
+	
+	if(!(bContinue == fileFind.FindFile(strFilePath)))
+	{
+		fileFind.Close();
+		strLog.Format("<Read_CSV_File(CString strFileName, int nKind)> Return Code _RESULT_ERR_NO_FILE(1)"); //jykim 171218 VisionAlarm구분 정상화
+		Save_Vision_Log(strLog); //jykim 171218 VisionAlarm구분 정상화
+		return _RESULT_ERR_NO_FILE; 
+	}
+	while(bContinue)
+	{
+		bContinue = fileFind.FindNextFile();
+		strDirName = fileFind.GetFileName();
+		if((strDirName != ".") && (strDirName != ".."))
+		{
+			if(strDirName.Compare(strTemp) == 0)
+			{
+				nRet = Read_CSV_File(strDirName, nKind);
+				break;
+			}
+		} 
+	} 
+	fileFind.Close();
+//2014.11.25 by tskim
+	strLog.Format("<Read File> %s - Return Code : %d", strTemp, nRet);
+	Save_Vision_Log(strLog);
+	return nRet; 
+}
+
+int CN_Vision::Read_CSV_File(CString strFileName, int nKind)
+{
+//	CMainFrame* pFrame = (CMainFrame*)AfxGetMainWnd();
+//	CP8CA_LcDispDoc* pDoc = (CP8CA_LcDispDoc *)pFrame->GetActiveDocument();
+	ifstream fi;
+	CString str, strPath;
+	BOOL bContinue = TRUE;
+	int i = 0, j = 0, k, nTemp;
+	char ch[100];
+	CString strLog;//2014.11.25 by tskim
+	m_bLC_Mode == _SEAL ? strPath.Format("%s\\%s", DIRECTORY_SEAL, strFileName) : strPath.Format("%s\\%s", DIRECTORY_LC, strFileName);
+	fi.open((char *)(LPCSTR)strPath, ios::in);
+	if(fi.is_open())
+	{
+		if(nKind == _CSV_COUNT_RESULT && m_bLC_Mode == _LC)
+		{
+			fi >> ch;
+			str.Format("%s", ch);
+			k = str.FindOneOf(",");
+			m_structCount_Result.m_strGlass_ID = str.Mid(0, k);
+			str.Delete(0,k+1);
+			k = str.FindOneOf(",");
+			str.Mid(0,k).Compare("OK") == 0 ? m_structCount_Result.m_bResult = _RESULT_OK : m_structCount_Result.m_bResult = _RESULT_NG;
+			str.Delete(0,k+1);
+			k = str.FindOneOf(",");
+			if(m_structCount_Result.m_bResult == _RESULT_NG) //jykim 171218 VisionAlarm구분 정상화
+			{
+				m_structCount_Result.m_str_Reason = str;
+				fi.close();
+//2014.11.25 by tskim
+				strLog.Format("<Read_CSV_File(CString strFileName, int nKind)#1> m_structCount_Result.m_bResult = FALSE m_structCount_Result.m_str_Reason (%s) Return Code _RESULT_ERR_NG(3)",m_structCount_Result.m_str_Reason);
+				Save_Vision_Log(strLog);
+				return _RESULT_ERR_NG;
+			}
+			m_structCount_Result.m_nGlass_Over_Count = atoi(str.Mid(0, k+1));
+			str.Delete(0,k+1);
+			k = str.FindOneOf(",");
+			k >= 0 ? str.Delete(k,str.GetLength()-k) : 1;
+			str.Compare("OK") == 0 ? m_structCount_Result.m_bGlass_Judge = _RESULT_OK : m_structCount_Result.m_bGlass_Judge = _RESULT_NG;
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+			fi >> ch;
+			str.Format("%s", ch);
+			k = str.FindOneOf(",");
+			m_structCount_Result.m_dGlass_Left_Up_X = atof(str.Mid(0,k));
+			str.Delete(0,k+1);
+			k = str.FindOneOf(",");
+			m_structCount_Result.m_dGlass_Left_Up_Y = atof(str.Mid(0,k));
+			str.Delete(0,k+1);
+			k = str.FindOneOf(",");
+			m_structCount_Result.m_dGlass_Right_Up_X = atof(str.Mid(0,k));
+			str.Delete(0,k+1);
+			k = str.FindOneOf(",");
+			k >= 0 ? str.Delete(k,str.GetLength()-k) : 1;
+			m_structCount_Result.m_dGlass_Right_Up_Y = atof(str);
+			fi >> ch;
+			str.Format("%s", ch);
+			k = str.FindOneOf(",");
+			m_structCount_Result.m_dGlass_Left_Down_X = atof(str.Mid(0,k));
+			str.Delete(0,k+1);
+			k = str.FindOneOf(",");
+			m_structCount_Result.m_dGlass_Left_Down_Y = atof(str.Mid(0,k));
+			str.Delete(0,k+1);
+			k = str.FindOneOf(",");
+			m_structCount_Result.m_dGlass_Right_Down_X = atof(str.Mid(0,k));
+			str.Delete(0,k+1);
+			k = str.FindOneOf(",");
+			k >= 0 ? str.Delete(k,str.GetLength()-k) : 1;
+			m_structCount_Result.m_dGlass_Right_Down_Y = atof(str);
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+			fi >> ch;
+			str.Format("%s", ch);
+			k = str.FindOneOf(",");
+			nTemp = atoi(str.Mid(0,k));
+
+			if(nTemp != m_nCellCount)
+			{
+				fi.close();
+//2014.11.25 by tskim
+				strLog.Format("<Read_CSV_File(CString strFileName, int nKind)#2> nTemp %d  m_nCellCount %d Return Code _RESULT_ERR_CELL_COUNT(4)",nTemp,m_nCellCount);
+				Save_Vision_Log(strLog);
+				return _RESULT_ERR_CELL_COUNT;
+			}
+			str.Delete(0,k+1);
+			k = str.FindOneOf(",");
+			m_structCount_Result.m_nTotal_Drop_Number = atoi(str.Mid(0,k));
+			str.Delete(0,k+1);
+			k = str.FindOneOf(",");
+			m_structCount_Result.m_nTotal_Drop_Count = atoi(str.Mid(0,k));
+			str.Delete(0,k+1);
+			k = str.FindOneOf(",");
+			k >= 0 ? str.Delete(k,str.GetLength()-k) : 1;
+			if(str.Compare("OK") == 0) m_structCount_Result.m_nTotal_Judge = _RESULT_OK;
+			else if(str.Compare("NG") == 0) m_structCount_Result.m_nTotal_Judge = _RESULT_NG;
+			else m_structCount_Result.m_nTotal_Judge = _RESULT_ER;
+			for(i = 0; i < m_nCellCount; i++)
+			{
+				fi >> ch;
+				str.Format("%s", ch);
+				k = str.FindOneOf(",");
+				nTemp = atoi(str.Mid(0,k));
+				if(i != nTemp - 1) 
+				{
+					fi.close();
+//2014.11.25 by tskim
+					strLog.Format("<Read_CSV_File(CString strFileName, int nKind)#3> i(CellCount) %d  nTemp-1 %d Return Code _RESULT_ERR_CELL_SEQ(5)",i,nTemp - 1);
+					Save_Vision_Log(strLog);
+					return _RESULT_ERR_CELL_SEQ;
+				}
+				str.Delete(0,k+1);
+				k = str.FindOneOf(",");
+				m_structCount_Result.m_nCell_Drop_Number[i] = atoi(str.Mid(0,k));
+				str.Delete(0,k+1);
+				k = str.FindOneOf(",");
+				m_structCount_Result.m_nCell_Drop_Count[i] = atoi(str.Mid(0,k));
+				str.Delete(0,k+1);
+				k = str.FindOneOf(",");
+				k >= 0 ? str.Delete(k,str.GetLength()-k) : 1;
+				str.Compare("OK") == 0 ? m_structCount_Result.m_bCell_Judge[i] = _RESULT_OK : m_structCount_Result.m_bCell_Judge[i] = _RESULT_NG;
+
+				fi >> ch;
+				str.Format("%s", ch);
+				k = str.FindOneOf(",");
+				_NVision.m_structCount_Result.m_nOver_Count[i] = atoi(str.Mid(0,k));
+				str.Delete(0,k+1);
+				k = str.FindOneOf(",");
+				_NVision.m_structCount_Result.m_nSeal_Over_Count[i] = atoi(str.Mid(0,k));
+				str.Delete(0,k+1);
+				k = str.FindOneOf(",");
+				k >= 0 ? str.Delete(k,str.GetLength()-k) : 1;
+				str.Compare("OK") == 0 ? m_structCount_Result.m_bSeal_Judge[i] = _RESULT_OK : m_structCount_Result.m_bSeal_Judge[i] = _RESULT_NG;
+				if(m_structCount_Result.m_nTotal_Judge != _RESULT_ER)
+				{
+					for(j = 0; j < m_structCount_Result.m_nOver_Count[i]; j++)
+					{
+						fi >> ch;
+						str.Format("%s", ch);
+						k = str.FindOneOf(",");
+						m_structCount_Result.m_dOver_Pos_X[i][j] = atof(str.Mid(0,k));
+						str.Delete(0,k+1);
+						k = str.FindOneOf(",");
+						k >= 0 ? str.Delete(k,str.GetLength()-k) : 1;
+						m_structCount_Result.m_dOver_Pos_Y[i][j] = atof(str);
+					}
+				}
+				fi >> ch;
+				str.Format("%s", ch);
+				k = str.FindOneOf(",");
+
+//220603 BIG DROP DETECT ( (OLD) DEEP DROP ) 
+//				k >= 0 ? str.Delete(k,str.GetLength()-k) : 1;
+//				m_structCount_Result.m_nMiss_Count[i] = atoi(str);
+
+				if(k >= 0)
+				{
+					m_structCount_Result.m_nMiss_Count[i] = atoi(str.Mid(0,k));
+
+					str.Delete(0,k+1);
+
+					k = str.FindOneOf(",");
+					k >= 0 ? str.Delete(k,str.GetLength()-k) : 1;
+
+					m_structCount_Result.m_nDeep_Count[i] = atoi(str);
+				}
+				else
+				{
+					m_structCount_Result.m_nMiss_Count[i] = atoi(str);
+
+//220620 MISSDROP 이 없는 CASE 고려 
+//					m_structCount_Result.m_nDeep_Count[i] = 0;
+					m_structCount_Result.m_nDeep_Count[i] = atoi(str);
+
+				}
+				if(m_structCount_Result.m_nDeep_Count[i] != 0)
+				{
+					strLog.Format("FILE READING ERR : ERR RESULE NG ( Big Drop NG ) , CELL %d , COUNT %d ", i+1, m_structCount_Result.m_nDeep_Count[i]); 
+					Save_Vision_Log(strLog);
+
+					m_structCount_Result.m_nTotal_Judge = _RESULT_ERR_BIG_DROP;
+
+//					fi.close();
+//					return _RESULT_ERR_BIG_DROP;
+				}
+//220603 BIG DROP DETECT ( (OLD) DEEP DROP ) 
+
+//220603 삭제 
+//				if(m_structCount_Result.m_nTotal_Judge != _RESULT_ER)
+//				{
+//					for(j = 0; j < m_structCount_Result.m_nMiss_Count[i]; j++)
+//					{
+//						fi >> ch;
+//						str.Format("%s", ch);
+//						k = str.FindOneOf(",");
+//						m_structCount_Result.m_dMiss_Pos_X[i][j] = atof(str.Mid(0,k));
+//						str.Delete(0,k+1);
+//						k = str.FindOneOf(",");
+//						k >= 0 ? str.Delete(k,str.GetLength()-k) : 1;
+//						m_structCount_Result.m_dMiss_Pos_Y[i][j] = atof(str);
+//					}
+//				}
+//220603 삭제
+			}
+//220620    실처리 보고 확인용 추가 
+			fi >> ch;
+			str.Format("%s", ch);
+			k = str.FindOneOf(",");
+			_NVision.m_structCount_Result.m_dDetectMax[0] = atoi(str.Mid(0,k));
+			str.Delete(0,k+1);
+			k = str.FindOneOf(",");
+			k >= 0 ? str.Delete(k,str.GetLength()-k) : 1;
+			_NVision.m_structCount_Result.m_dDetectMax[1] = atoi(str);
+
+			fi >> ch;
+			str.Format("%s", ch);
+			k = str.FindOneOf(",");
+			_NVision.m_structCount_Result.m_dDetectMax[2] = atoi(str.Mid(0,k));
+			str.Delete(0,k+1);
+			k = str.FindOneOf(",");
+			k >= 0 ? str.Delete(k,str.GetLength()-k) : 1;
+			int nTempData = atoi(str);
+
+			if(m_structCount_Result.m_nTotal_Judge == _RESULT_ERR_BIG_DROP)
+			{
+				fi.close();
+				return _RESULT_ERR_BIG_DROP;
+			}
+
+		}
+		else if(nKind == _CSV_INSP_RESULT && m_bLC_Mode == _SEAL)
+		{
+			fi >> ch;
+			str.Format("%s", ch);
+			k = str.FindOneOf(",");
+			m_structInsp_Result.m_strGlass_ID = str.Mid(0, k);
+			str.Delete(0,k+1); str.Delete(2, str.GetLength()-2);
+			str.Compare("OK") == 0 ? m_structInsp_Result.m_bResult = _RESULT_OK : m_structInsp_Result.m_bResult = _RESULT_NG;
+			if(m_structInsp_Result.m_bResult == _RESULT_NG)
+			{
+				k = str.FindOneOf(",");
+				str.Delete(0,k+1);
+				m_structInsp_Result.m_str_Reason = str;
+				fi.close();
+				return 0;
+			}
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+			fi >> ch;
+			str.Format("%s", ch);
+			k = str.FindOneOf(",");
+			m_structInsp_Result.m_dGlass_Left_Up_X = atof(str.Mid(0,k));
+			str.Delete(0,k+1);
+			k = str.FindOneOf(",");
+			m_structInsp_Result.m_dGlass_Left_Up_Y = atof(str.Mid(0,k));
+			str.Delete(0,k+1);
+			k = str.FindOneOf(",");
+			m_structInsp_Result.m_dGlass_Right_Up_X = atof(str.Mid(0,k));
+			str.Delete(0,k+1);
+			k = str.FindOneOf(",");
+			k >= 0 ? str.Delete(k,str.GetLength()-k) : 1;
+			m_structInsp_Result.m_dGlass_Right_Up_Y = atof(str);
+			fi >> ch;
+			str.Format("%s", ch);
+			k = str.FindOneOf(",");
+			m_structInsp_Result.m_dGlass_Left_Down_X = atof(str.Mid(0,k));
+			str.Delete(0,k+1);
+			k = str.FindOneOf(",");
+			m_structInsp_Result.m_dGlass_Left_Down_Y = atof(str.Mid(0,k));
+			str.Delete(0,k+1);
+			k = str.FindOneOf(",");
+			m_structInsp_Result.m_dGlass_Right_Down_X = atof(str.Mid(0,k));
+			str.Delete(0,k+1);
+			k = str.FindOneOf(",");
+			k >= 0 ? str.Delete(k,str.GetLength()-k) : 1;
+			m_structInsp_Result.m_dGlass_Right_Down_Y = atof(str);
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+			fi >> ch;
+			str.Format("%s", ch);
+			k = str.FindOneOf(",");
+			nTemp = atoi(str.Mid(0,k));
+			if(nTemp != m_structCell_Info_Seal.m_nCell_Count)
+			{
+				fi.close();
+				return 4;
+			}
+			m_structInsp_Result.m_nCell_No = nTemp;
+			str.Delete(0,k+1);
+			k = str.FindOneOf(",");
+			m_structInsp_Result.m_nCell_Total_Break = atoi(str.Mid(0,k));
+			str.Delete(0,k+1);
+			k = str.FindOneOf(",");
+			m_structInsp_Result.m_nCell_Total_Wide = atoi(str.Mid(0,k));
+			str.Delete(0,k+1);
+			k = str.FindOneOf(",");
+			k >= 0 ? str.Delete(k,str.GetLength()-k) : 1;
+			m_structInsp_Result.m_nCell_Total_Narrow = atoi(str);
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+			for(i = 0; i < (int)m_structInsp_Result.m_nCell_No; i++)
+			{
+				fi >> ch;
+				str.Format("%s", ch);
+				k = str.FindOneOf(",");
+				nTemp = atoi(str.Mid(0,k));
+				if(i != nTemp - 1) 
+				{
+					fi.close();
+					return 5;
+				}
+				str.Delete(0,k+1);
+				k = str.FindOneOf(",");
+				m_structInsp_Result.m_dCell_Shift_X[i] = atof(str.Mid(0,k));
+				str.Delete(0,k+1);
+				k = str.FindOneOf(",");
+				k >= 0 ? str.Delete(k,str.GetLength()-k) : 1;
+				m_structInsp_Result.m_dCell_Shift_Y[i] = atof(str);
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+				fi >> ch;
+				str.Format("%s", ch);
+				k = str.FindOneOf(",");
+				k >= 0 ? str.Delete(k,str.GetLength()-k) : 1;
+				m_structInsp_Result.m_nCell_Break[i] = atoi(str);
+				for(j = 0; j < (int)m_structInsp_Result.m_nCell_Break[i]; j++)
+				{
+					fi >> ch;
+					str.Format("%s", ch);
+					k = str.FindOneOf(",");
+					m_structInsp_Result.m_dCell_Break_Start_X[i][j] = atof(str.Mid(0,k));
+					str.Delete(0,k+1);
+					k = str.FindOneOf(",");
+					m_structInsp_Result.m_dCell_Break_Start_Y[i][j] = atof(str.Mid(0,k));
+					str.Delete(0,k+1);
+					k = str.FindOneOf(",");
+					m_structInsp_Result.m_dCell_Break_End_X[i][j] = atof(str.Mid(0,k));
+					str.Delete(0,k+1);
+					k = str.FindOneOf(",");
+					k >= 0 ? str.Delete(k,str.GetLength()-k) : 1;
+					m_structInsp_Result.m_dCell_Break_End_Y[i][j] = atof(str);
+				}
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+				fi >> ch;
+				str.Format("%s", ch);
+				k = str.FindOneOf(",");
+				k >= 0 ? str.Delete(k,str.GetLength()-k) : 1;
+				m_structInsp_Result.m_nCell_Wide[i] = atoi(str);
+				for(j = 0; j < (int)m_structInsp_Result.m_nCell_Wide[i]; j++)
+				{
+					fi >> ch;
+					str.Format("%s", ch);
+					k = str.FindOneOf(",");
+					m_structInsp_Result.m_dCell_Wide_Start_X[i][j] = atof(str.Mid(0,k));
+					str.Delete(0,k+1);
+					k = str.FindOneOf(",");
+					m_structInsp_Result.m_dCell_Wide_Start_Y[i][j] = atof(str.Mid(0,k));
+					str.Delete(0,k+1);
+					k = str.FindOneOf(",");
+					m_structInsp_Result.m_dCell_Wide_End_X[i][j] = atof(str.Mid(0,k));
+					str.Delete(0,k+1);
+					k = str.FindOneOf(",");
+					k >= 0 ? str.Delete(k,str.GetLength()-k) : 1;
+					m_structInsp_Result.m_dCell_Wide_End_Y[i][j] = atof(str);
+				}
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+				fi >> ch;
+				str.Format("%s", ch);
+				k = str.FindOneOf(",");
+				k >= 0 ? str.Delete(k,str.GetLength()-k) : 1;
+				m_structInsp_Result.m_nCell_Narrow[i] = atoi(str);
+				for(j = 0; j < (int)m_structInsp_Result.m_nCell_Narrow[i]; j++)
+				{
+					fi >> ch;
+					str.Format("%s", ch);
+					k = str.FindOneOf(",");
+					m_structInsp_Result.m_dCell_Narrow_Start_X[i][j] = atof(str.Mid(0,k));
+					str.Delete(0,k+1);
+					k = str.FindOneOf(",");
+					m_structInsp_Result.m_dCell_Narrow_Start_Y[i][j] = atof(str.Mid(0,k));
+					str.Delete(0,k+1);
+					k = str.FindOneOf(",");
+					m_structInsp_Result.m_dCell_Narrow_End_X[i][j] = atof(str.Mid(0,k));
+					str.Delete(0,k+1);
+					k = str.FindOneOf(",");
+					k >= 0 ? str.Delete(k,str.GetLength()-k) : 1;
+					m_structInsp_Result.m_dCell_Narrow_End_Y[i][j] = atof(str);
+				}
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+				fi >> ch;
+				str.Format("%s", ch);
+				k = str.FindOneOf(",");
+				k >= 0 ? str.Delete(k,str.GetLength()-k) : 1;
+				m_structInsp_Result.m_nCell_Vertex[i] = atoi(str);
+				for(j = 0; j < (int)m_structInsp_Result.m_nCell_Vertex[i]; j++)
+				{
+					fi >> ch;
+					str.Format("%s", ch);
+					k = str.FindOneOf(",");
+					m_structInsp_Result.m_dCell_Vertex_Start_X[i][j] = atof(str.Mid(0,k));
+					str.Delete(0,k+1);
+					k = str.FindOneOf(",");
+					m_structInsp_Result.m_dCell_Vertex_Start_Y[i][j] = atof(str.Mid(0,k));
+					str.Delete(0,k+1);
+					k = str.FindOneOf(",");
+					m_structInsp_Result.m_dCell_Vertex_End_X[i][j] = atof(str.Mid(0,k));
+					str.Delete(0,k+1);
+					k = str.FindOneOf(",");
+					k >= 0 ? str.Delete(k,str.GetLength()-k) : 1;
+					m_structInsp_Result.m_dCell_Vertex_End_Y[i][j] = atof(str);
+				}
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+			}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+			fi >> ch;
+			str.Format("%s", ch);
+			k = str.FindOneOf(",");
+			nTemp = atoi(str.Mid(0,k));
+			if(nTemp != m_structCell_Info_Seal.m_nDummy_Count)
+			{
+				fi.close();
+				return 4;
+			}
+			m_structInsp_Result.m_nDummy_No = nTemp;
+			str.Delete(0,k+1);
+			k = str.FindOneOf(",");
+			m_structInsp_Result.m_nDummy_Total_Break = atoi(str.Mid(0,k));
+			str.Delete(0,k+1);
+			k = str.FindOneOf(",");
+			m_structInsp_Result.m_nDummy_Total_Wide = atoi(str.Mid(0,k));
+			str.Delete(0,k+1);
+			k = str.FindOneOf(",");
+			k >= 0 ? str.Delete(k,str.GetLength()-k) : 1;
+			m_structInsp_Result.m_nDummy_Total_Narrow = atoi(str);
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+			for(i = 0; i < (int)m_structInsp_Result.m_nDummy_No; i++)
+			{
+				fi >> ch;
+				str.Format("%s", ch);
+				k = str.FindOneOf(",");
+				nTemp = atoi(str.Mid(0,k));
+				if(i != nTemp - 1) 
+				{
+					fi.close();
+					return 5;
+				}
+				str.Delete(0,k+1);
+				k = str.FindOneOf(",");
+				m_structInsp_Result.m_dDummy_Shift_X[i] = atof(str.Mid(0,k));
+				str.Delete(0,k+1);
+				k = str.FindOneOf(",");
+				k >= 0 ? str.Delete(k,str.GetLength()-k) : 1;
+				m_structInsp_Result.m_dDummy_Shift_Y[i] = atof(str);
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+				fi >> ch;
+				str.Format("%s", ch);
+				k = str.FindOneOf(",");
+				k >= 0 ? str.Delete(k,str.GetLength()-k) : 1;
+				m_structInsp_Result.m_nDummy_Break[i] = atoi(str);
+				for(j = 0; j < (int)m_structInsp_Result.m_nDummy_Break[i]; j++)
+				{
+					fi >> ch;
+					str.Format("%s", ch);
+					k = str.FindOneOf(",");
+					m_structInsp_Result.m_dDummy_Break_Start_X[i][j] = atof(str.Mid(0,k));
+					str.Delete(0,k+1);
+					k = str.FindOneOf(",");
+					m_structInsp_Result.m_dDummy_Break_Start_Y[i][j] = atof(str.Mid(0,k));
+					str.Delete(0,k+1);
+					k = str.FindOneOf(",");
+					m_structInsp_Result.m_dDummy_Break_End_X[i][j] = atof(str.Mid(0,k));
+					str.Delete(0,k+1);
+					k = str.FindOneOf(",");
+					k >= 0 ? str.Delete(k,str.GetLength()-k) : 1;
+					m_structInsp_Result.m_dDummy_Break_End_Y[i][j] = atof(str);
+				}
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+				fi >> ch;
+				str.Format("%s", ch);
+				k = str.FindOneOf(",");
+				k >= 0 ? str.Delete(k,str.GetLength()-k) : 1;
+				m_structInsp_Result.m_nDummy_Wide[i] = atoi(str);
+				for(j = 0; j < (int)m_structInsp_Result.m_nDummy_Wide[i]; j++)
+				{
+					fi >> ch;
+					str.Format("%s", ch);
+					k = str.FindOneOf(",");
+					m_structInsp_Result.m_dDummy_Wide_Start_X[i][j] = atof(str.Mid(0,k));
+					str.Delete(0,k+1);
+					k = str.FindOneOf(",");
+					m_structInsp_Result.m_dDummy_Wide_Start_Y[i][j] = atof(str.Mid(0,k));
+					str.Delete(0,k+1);
+					k = str.FindOneOf(",");
+					m_structInsp_Result.m_dDummy_Wide_End_X[i][j] = atof(str.Mid(0,k));
+					str.Delete(0,k+1);
+					k = str.FindOneOf(",");
+					k >= 0 ? str.Delete(k,str.GetLength()-k) : 1;
+					m_structInsp_Result.m_dDummy_Wide_End_Y[i][j] = atof(str);
+				}
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+				fi >> ch;
+				str.Format("%s", ch);
+				k = str.FindOneOf(",");
+				k >= 0 ? str.Delete(k,str.GetLength()-k) : 1;
+				m_structInsp_Result.m_nDummy_Narrow[i] = atoi(str);
+				for(j = 0; j < (int)m_structInsp_Result.m_nDummy_Narrow[i]; j++)
+				{
+					fi >> ch;
+					str.Format("%s", ch);
+					k = str.FindOneOf(",");
+					m_structInsp_Result.m_dDummy_Narrow_Start_X[i][j] = atof(str.Mid(0,k));
+					str.Delete(0,k+1);
+					k = str.FindOneOf(",");
+					m_structInsp_Result.m_dDummy_Narrow_Start_Y[i][j] = atof(str.Mid(0,k));
+					str.Delete(0,k+1);
+					k = str.FindOneOf(",");
+					m_structInsp_Result.m_dDummy_Narrow_End_X[i][j] = atof(str.Mid(0,k));
+					str.Delete(0,k+1);
+					k = str.FindOneOf(",");
+					k >= 0 ? str.Delete(k,str.GetLength()-k) : 1;
+					m_structInsp_Result.m_dDummy_Narrow_End_Y[i][j] = atof(str);
+				}
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+				fi >> ch;
+				str.Format("%s", ch);
+				k = str.FindOneOf(",");
+				k >= 0 ? str.Delete(k,str.GetLength()-k) : 1;
+				m_structInsp_Result.m_nDummy_Vertex[i] = atoi(str);
+				for(j = 0; j < (int)m_structInsp_Result.m_nDummy_Vertex[i]; j++)
+				{
+					fi >> ch;
+					str.Format("%s", ch);
+					k = str.FindOneOf(",");
+					m_structInsp_Result.m_dDummy_Vertex_Start_X[i][j] = atof(str.Mid(0,k));
+					str.Delete(0,k+1);
+					k = str.FindOneOf(",");
+					m_structInsp_Result.m_dDummy_Vertex_Start_Y[i][j] = atof(str.Mid(0,k));
+					str.Delete(0,k+1);
+					k = str.FindOneOf(",");
+					m_structInsp_Result.m_dDummy_Vertex_End_X[i][j] = atof(str.Mid(0,k));
+					str.Delete(0,k+1);
+					k = str.FindOneOf(",");
+					k >= 0 ? str.Delete(k,str.GetLength()-k) : 1;
+					m_structInsp_Result.m_dDummy_Vertex_End_Y[i][j] = atof(str);
+				}
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+			}
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+			fi >> ch;
+			str.Format("%s", ch);
+			k = str.FindOneOf(",");
+			k >= 0 ? str.Delete(k,str.GetLength()-k) : 1;
+			nTemp = atoi(str);
+			if(nTemp != m_structCell_Info_Seal.m_nAu_Count)
+			{
+				fi.close();
+				return 4;
+			}
+			m_structInsp_Result.m_nAu_No = nTemp;
+			for(i = 0; i < (int)m_structInsp_Result.m_nAu_No; i++)
+			{
+				fi >> ch;
+				str.Format("%s", ch);
+				k = str.FindOneOf(",");
+				nTemp = atoi(str.Mid(0,k));
+				if(i != nTemp - 1) 
+				{
+					fi.close();
+					return 5;
+				}
+				str.Delete(0,k+1);
+				k = str.FindOneOf(",");
+				m_structInsp_Result.m_dAu_Shift_X[i] = atof(str.Mid(0,k));
+				str.Delete(0,k+1);
+				k = str.FindOneOf(",");
+				m_structInsp_Result.m_dAu_Shift_Y[i] = atof(str.Mid(0,k));
+				str.Delete(0,k+1);
+				k = str.FindOneOf(",");
+				if(k == 2)
+				{
+					str.Mid(0,k).Compare("OK") == 0 ? m_structInsp_Result.m_bAu_Over[i] = _RESULT_OK : m_structInsp_Result.m_bAu_Over[i] = _RESULT_NG;
+				}
+				else return 100;
+				str.Delete(0,k+1);
+				k = str.FindOneOf(",");
+				k >= 0 ? str.Delete(k,str.GetLength()-k) : 1;
+				str.Compare("OK") == 0 ? m_structInsp_Result.m_bAu_Under[i] = _RESULT_OK : m_structInsp_Result.m_bAu_Under[i] = _RESULT_NG;
+			}
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+		}
+		else if(nKind == _CSV_TRACE_RESULT)
+		{
+			fi >> ch;
+			str.Format("%s", ch);
+			k = str.FindOneOf(",");
+			m_structTrace_Result.m_strGlass_ID = str.Mid(0, k);
+			str.Delete(0,k+1); str.Delete(2, str.GetLength()-2);
+			str.Compare("OK") == 0 ? m_structTrace_Result.m_bResult = _RESULT_OK : m_structTrace_Result.m_bResult = _RESULT_NG;
+			if(m_structTrace_Result.m_bResult == _RESULT_NG)
+			{
+				k = str.FindOneOf(",");
+				str.Delete(0,k+1);
+				m_structTrace_Result.m_str_Reason = str;
+				fi.close();
+				return 0;
+			}
+			fi >> ch;
+			str.Format("%s", ch);
+			k = str.FindOneOf(",");
+			k >= 0 ? str.Delete(k,str.GetLength()-k) : 1;
+			nTemp = atoi(str);
+			if(nTemp != m_structCell_Info_Seal.m_nCell_Count)
+			{
+				fi.close();
+				return 4;
+			}
+			m_structTrace_Result.m_nCell_No = nTemp;
+			for(i = 0; i < (int)m_structTrace_Result.m_nCell_No; i++)
+			{
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+				fi >> ch;
+				str.Format("%s", ch);
+				k = str.FindOneOf(",");
+				nTemp = atoi(str.Mid(0,k));
+				if(i != nTemp - 1) 
+				{
+					fi.close();
+					return 5;
+				}
+				str.Delete(0,k+1);
+				k = str.FindOneOf(",");
+				m_structTrace_Result.m_nTrace_No[i] = atoi(str.Mid(0,k));
+				str.Delete(0,k+1);
+				k = str.FindOneOf(",");
+				k >= 0 ? str.Delete(k,str.GetLength()-k) : 1;
+				m_structTrace_Result.m_nCorner_No[i] = atoi(str);
+				for(j = 0; j < (int)m_structTrace_Result.m_nTrace_No[i]; j++)
+				{
+					fi >> ch;
+					str.Format("%s", ch);
+					k = str.FindOneOf(",");
+					nTemp = atoi(str.Mid(0,k));
+					if(j != nTemp - 1) 
+					{
+						fi.close();
+						return 5;
+					}
+					str.Delete(0,k+1);
+					k = str.FindOneOf(",");
+					m_structTrace_Result.m_dLine_Start_X[i][j] = atof(str.Mid(0,k));
+					str.Delete(0,k+1);
+					k = str.FindOneOf(",");
+					m_structTrace_Result.m_dLine_Start_Y[i][j] = atof(str.Mid(0,k));
+					str.Delete(0,k+1);
+					k = str.FindOneOf(",");
+					m_structTrace_Result.m_dLine_End_X[i][j] = atof(str.Mid(0,k));
+					str.Delete(0,k+1);
+					k = str.FindOneOf(",");
+					m_structTrace_Result.m_dLine_End_Y[i][j] = atof(str.Mid(0,k));
+					str.Delete(0,k+1);
+					k = str.FindOneOf(",");
+					m_structTrace_Result.m_dLine_Width_Max[i][j] = atof(str.Mid(0,k));
+					str.Delete(0,k+1);
+					k = str.FindOneOf(",");
+					m_structTrace_Result.m_dLine_Width_Min[i][j] = atof(str.Mid(0,k));
+					str.Delete(0,k+1);
+					k = str.FindOneOf(",");
+					k >= 0 ? str.Delete(k,str.GetLength()-k) : 1;
+					m_structTrace_Result.m_dLine_Width_Avr[i][j] = atof(str);
+				}
+				for(j = 0; j < (int)m_structTrace_Result.m_nCorner_No[i]; j++)
+				{
+					fi >> ch;
+					str.Format("%s", ch);
+					k = str.FindOneOf(",");
+					nTemp = atoi(str.Mid(0,k));
+					if(j != nTemp - 1) 
+					{
+						fi.close();
+						return 5;
+					}
+					str.Delete(0,k+1);
+					k = str.FindOneOf(",");
+					m_structTrace_Result.m_dCorner_Start_X[i][j] = atof(str.Mid(0,k));
+					str.Delete(0,k+1);
+					k = str.FindOneOf(",");
+					m_structTrace_Result.m_dCorner_Start_Y[i][j] = atof(str.Mid(0,k));
+					str.Delete(0,k+1);
+					k = str.FindOneOf(",");
+					m_structTrace_Result.m_dCorner_End_X[i][j] = atof(str.Mid(0,k));
+					str.Delete(0,k+1);
+					k = str.FindOneOf(",");
+					m_structTrace_Result.m_dCorner_End_Y[i][j] = atof(str.Mid(0,k));
+					str.Delete(0,k+1);
+					k = str.FindOneOf(",");
+					m_structTrace_Result.m_dCorner_Width_Max[i][j] = atof(str.Mid(0,k));
+					str.Delete(0,k+1);
+					k = str.FindOneOf(",");
+					m_structTrace_Result.m_dCorner_Width_Min[i][j] = atof(str.Mid(0,k));
+					str.Delete(0,k+1);
+					k = str.FindOneOf(",");
+					k >= 0 ? str.Delete(k,str.GetLength()-k) : 1;
+					m_structTrace_Result.m_dCorner_Width_Avr[i][j] = atof(str);
+				}
+			}
+			
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+		}
+	}
+	else 
+	{
+		fi.close();
+		return 2;
+	}
+	fi.close();
+	return 0;
+}
+
+int CN_Vision::OnConnect_NetDriver()
+{
+	// 비젼 PC IP
+	char chIP[] = {"192.168.0.1"};
+	
+	// 비젼 PC 의 임의 공유폴더명을 입력
+	char chFolderName[] = {"TOP"};
+	
+	// 제어 PC 에서 설정될 네트웍드라이브명. 정상적으로 네트웍드라이브 연결되면, 탐색기에서 Z드라이브 생성됨.
+	char chDriveName[] = {"Z:"};
+	
+	// 비젼 PC 의 윈도우 LogIn ID. 없으면 blank 처리함.
+	char chUserID[] = {"top"};
+	
+	// 비젼 PC 의 윈도우 LogIn PW. 없으면 blank 처리함.
+	char chPW[] = {""};
+	
+	
+	// 성공시 0 이상값 반환됨. 실패시 0 미만값 반환됨.
+	return TopEngCommClient_ConnectNetDrive(chIP, chFolderName, chDriveName, chUserID, chPW);
+}
+
+void CN_Vision::GetMsg_from_Vision(CString strTotal)
+{
+	CString strLog;
+	if(strTotal.GetLength() < 1)
+	{
+		g_strRcv_Sub = _T("");
+		g_strRcv_Cont = _T("");
+		return;
+	}
+	int i,j;
+	CString strSub, strCont;
+	i = strTotal.FindOneOf("[");
+	j = strTotal.FindOneOf("]");
+
+	if(i >= j)
+	{
+		g_strRcv_Sub = _T("");
+		g_strRcv_Cont = _T("");
+		return;
+	}
+
+	strSub = strTotal.Mid(i+1, j-i-1);
+	i = strTotal.Find("[END]");
+
+	if(i <= j)
+	{
+		g_strRcv_Sub = strSub;
+		g_strRcv_Cont = _T("");
+		return;
+	}
+	strCont = strTotal.Mid(j+1, i-j-1);
+
+	g_strRcv_Sub = strSub;
+	g_strRcv_Cont = strCont;
+
+	strLog.Format("<Get Msg>\t\tSubject : %s , Content : %s", g_strRcv_Sub, g_strRcv_Cont);
+	Save_Vision_Log(strLog);
+}
+
+CString CN_Vision::SendMsg_to_Vision(int nKind, CString strCont, int *nRet)
+{
+	CMainFrame* pFrame = (CMainFrame*)AfxGetMainWnd();
+	CString str, strLog, strSub;
+	int nCount = 0;
+	g_bRcvMsg = FALSE;
+	switch (nKind)
+	{
+	case _SEND_NOT_FILE_PATH:
+		if(m_bLC_Mode == _SEAL)
+		{
+			str = "[SDP_NOT_FILE_PATH]D:\\TOP\\SEAL_VISION[END]";
+			strSub = "SVS_RES_FILE_PATH";
+		}
+		else
+		{
+			str = "[LDP_NOT_FILE_PATH]D:\\TOP\\N_VISION[END]";
+			strSub = "LVS_RES_FILE_PATH";
+		}
+		break;
+	case _SEND_REQ_FILE_READ: 
+		if(m_bLC_Mode == _SEAL)
+		{
+			str = "[SDP_REQ_FILE_READ]"+strCont+"[END]";
+			strSub = "SVS_RES_FILE_READ";
+		}
+		else
+		{
+			str = "[LDP_REQ_FILE_READ]"+strCont+"[END]";
+			strSub = "LVS_RES_FILE_READ";
+		}
+		break;
+	case _SEND_REQ_START_INSP:
+		if(m_bLC_Mode == _SEAL)
+		{
+			str = "[SDP_REQ_START_INSP]"+strCont+"[END]";
+			strSub = "SVS_RES_START_INSP";
+		}
+		else
+		{
+			str = "[LDP_REQ_START_INSP]"+strCont+"[END]";
+			strSub = "LVS_RES_START_INSP";
+		}
+		break;
+	case _SEND_REQ_STATUS:
+		if(m_bLC_Mode == _SEAL)
+		{
+			str = "[SDP_REQ_STATUS][END]";
+			strSub = "SVS_RES_STATUS";
+		}
+		else
+		{
+			str = "[LDP_REQ_STATUS][END]";
+			strSub = "LVS_RES_STATUS";
+		}
+		break;
+	case _SEND_NOT_STOP:
+		if(m_bLC_Mode == _SEAL)
+		{
+			str = "[SDP_NOT_MOVE_STOP]"+strCont+"[END]";
+			strSub = "SVS_RES_MOVE_STOP";
+		}
+		else
+		{
+			str = "[LDP_NOT_MOVE_STOP]"+strCont+"[END]";
+			strSub = "LVS_RES_MOVE_STOP";
+		}
+		break;
+	case _SEND_RES_COUNT_RESULT :
+		if(m_bLC_Mode == _SEAL)
+		{
+			str = "[SDP_RES_RESULT_READ]"+strCont+"[END]";
+		}
+		else str = "[LDP_RES_RESULT_READ]"+strCont+"[END]";
+		strSub = _T("");
+		break;
+	case _SEND_RES_INSP_RESULT :
+		if(m_bLC_Mode == _SEAL) str = "[SDP_RES_INSP_RESULT_READ]"+strCont+"[END]";
+		else str = "[LDP_RES_INSP_RESULT_READ]"+strCont+"[END]";
+		strSub = _T("");
+		break;
+	}
+
+	*nRet = CommLibMsgSend(str);
+
+	strLog.Format("<Send Msg>\t\t%s , Return Value : %d", str, *nRet);
+	Save_Vision_Log(strLog);
+#if !_SCAN
+	*nRet = 1;
+#endif
+	
+	if(*nRet > 0)
+	{
+		if(nKind == _SEND_RES_COUNT_RESULT || nKind == _SEND_RES_INSP_RESULT)
+		{
+			return _T("");
+		}
+// 		else if(nKind == _SEND_NOT_STOP)
+// 		{
+// 			return strSub;
+// 		}
+		while(1)
+		{
+#if !_SCAN
+			_NVision.GetMsg_from_Vision(str);
+			g_strRcv_Sub = strSub;
+//			if(nKind == _SEND_NOT_STOP);
+//				g_strRcv_Cont = "OK";
+			g_bRcvMsg = TRUE;
+#endif
+			if(g_bRcvMsg) break;
+			if(strCont.Compare("SCAN_INFO") == 0)
+			{
+				if(nCount++ > 2000)
+				{
+					*nRet = RES_ERR_TIMEOVER; // Time Over
+					Save_Vision_Log("<<SCAN_INFO>> Timeover Err!");
+					return strCont;
+				}
+			}
+			else
+			{
+				if(nCount++ > 100)//2014.11.25 by tskim Retry Count 30 -> 100
+				{
+					*nRet = RES_ERR_TIMEOVER; // Time Over
+					Save_Vision_Log("Timeover Err!");
+					return strCont;
+				}
+			}
+			pFrame->DoEvents();//2014.02.22 by tskim
+			Sleep(100);
+		}
+	}
+	else 
+	{
+		*nRet = RES_ERR_CONNECT;
+		Save_Vision_Log("Connect Err!");
+		return strCont;
+	}
+	if(g_strRcv_Sub.Compare(strSub) != 0)
+	{
+		*nRet = RES_ERR_DISMATCH; // 보낸 Title 과 받은 Title 이 틀림..
+		Save_Vision_Log("Dismatch Err!");
+		return strCont;
+	}
+	g_bRcvMsg = FALSE;
+
+/*	if(g_strRcv_Cont.Find("NG") != -1)		//ehji 140804
+	{
+		int i;
+		i = g_strRcv_Cont.Find("_");
+		*nRet = RES_ERR_NG;
+		strLog.Format("NG Err (%s)", g_strRcv_Cont);
+		Save_Vision_Log(strLog);
+		if(g_strRcv_Cont.GetLength() == 5) return g_strRcv_Cont.Mid(i+1, 2); // ERROR CODE 반환
+		else return "";
+		
+	}
+*/
+	strLog.Format("No Problem (%s)", g_strRcv_Cont);
+	Save_Vision_Log(strLog);
+	return g_strRcv_Cont;
+}
+
+BOOL CN_Vision::Engine_Start()
+{
+	int nEng;
+	CString strLog;
+#if _SCAN
+	nEng = CommLibEngineStart(TRUE);
+#else
+	nEng = 0;
+#endif	
+	if(nEng != 0)
+	{
+		strLog.Format("Vision Engine Start Fail - Error Code : %d", nEng);
+		Save_Vision_Log(strLog);
+		return FALSE;
+	}
+	strLog.Format("Vision Engine Start Success");
+	Save_Vision_Log(strLog);
+	return TRUE;
+}
+
+void CN_Vision::Engine_End()
+{
+	int nEng;
+	CString strLog;
+#if _SCAN
+	nEng = CommLibEngineStart(FALSE);
+#else
+	nEng = 0;
+#endif	
+	if(nEng != 0)
+	{
+		strLog.Format("Vision Engine End Fail - Error Code : %d", nEng);
+		Save_Vision_Log(strLog);
+		return;
+	}
+	strLog.Format("Vision Engine Start Success");
+	Save_Vision_Log(strLog);
+}
+
+BOOL CN_Vision::Init_N_Vision()
+{
+	if(!PC_TYPE) return TRUE;
+	int nPort, nClose, nNet;
+	CString strLog;
+#if _SCAN
+	nClose = CommLibClosePort();
+	Sleep(10);
+	nPort = CommLibOpenPort();
+	Sleep(10);
+	nNet = OnConnect_NetDriver();
+	Sleep(10);
+#else
+	nClose = nPort = 0;
+	nNet = 0;
+#endif
+	if(nPort + nClose != 0 || nNet < 0) 
+	{
+		CString str;
+		str.Format("Port Close Error Code : %d \n Port Open Error Code : %d \n Net Driver Connect Error Code : %d", 
+			nClose, nPort, nNet);
+		strLog.Format("<N_Vision Initial>\tFail - %s ", str);
+		Save_Vision_Log(strLog);
+//		AfxMessageBox(str);
+		return FALSE;
+	}
+	else 
+	{
+		strLog.Format("<N_Vision Initial>\tSuccess ");
+		Save_Vision_Log(strLog);
+	}
+
+	return TRUE;
+}
+
+void CN_Vision::Save_Vision_Log(CString strText)
+{
+	CFileFind filefind;
+	FILE *fp;
+	CFileException e;
+	
+	if(strText == "") return ;
+	
+	CTime t = CTime::GetCurrentTime();
+	
+	// Glass ID Directory 생성
+	
+	CString strFileName, strDirName, str;
+	BOOL bIsDir = FALSE;
+	BOOL bContinue = TRUE;
+	
+	
+	// 디렉토리 탐색
+	filefind.FindFile(g_strLogPath+"\\*.*");
+	bIsDir = FALSE;
+	bContinue = TRUE;
+	while(bContinue)
+	{
+		bContinue = filefind.FindNextFile();
+		if(filefind.IsDirectory())
+		{
+			strDirName = filefind.GetFileName();
+			if(strDirName == "N_Vision_Log")
+			{
+				bIsDir = TRUE;
+				break;
+			}
+		}
+	}
+	
+	filefind.Close();
+	
+	if(!bIsDir)	_mkdir(g_strLogPath+"\\N_Vision_Log");
+	// 날짜 Directory 생성 완료
+	
+	strFileName.Format(g_strLogPath+"\\N_Vision_Log\\%d-%02d-%02d.log", t.GetYear(), t.GetMonth(), t.GetDay());
+	// 화일 열기
+	fp = fopen((char *)(LPCSTR)strFileName, "at");
+	if(!fp) 
+	{
+		return;
+	}
+	str.Format("%02d:%02d:%02d - ",t.GetHour(), t.GetMinute(), t.GetSecond());
+	str += strText;
+	str += "\n";
+	fprintf(fp, str);
+	fclose(fp);
+	
+	// 한달 이전 Log file은 지워버린다...
+	// 디렉토리 탐색
+	filefind.FindFile(g_strLogPath+"\\N_Vision_Log\\*.*");
+	bIsDir = FALSE;
+	bContinue = TRUE;
+	while(bContinue)
+	{
+		bContinue = filefind.FindNextFile();
+		if(!filefind.IsDirectory())
+		{
+			strFileName = filefind.GetFileName();
+			str = strFileName;
+			int nYear, nMonth, nDay;
+			int nYear1, nMonth1, nDay1;
+			nYear = t.GetYear();
+			nMonth = t.GetMonth();
+			nDay = t.GetDay();
+			
+			nYear1 = atoi(str.Mid(0, 4));
+			nMonth1 = atoi(str.Mid(5, 2));
+			nDay1 = atoi(str.Mid(8, 2));
+			
+			if(nYear1 < nYear) 
+			{
+				::DeleteFile(g_strLogPath+"\\N_Vision_Log\\"+strFileName);
+			}
+			if((nMonth1*30+nDay1) < (nMonth*30+nDay-30))
+			{
+				::DeleteFile(g_strLogPath+"\\N_Vision_Log\\"+strFileName);
+			}
+		}
+	}
+}
+
+void CN_Vision::Delete_CSV_File(int nKind)
+{
+	CString strPath;
+	switch (nKind)
+	{
+	case _CSV_CELL_INFO: strPath.Format("%s\\CELL_INFO.csv", (m_bLC_Mode == _SEAL ? DIRECTORY_SEAL : DIRECTORY_LC));
+		break;
+	case _CSV_RECIPE_INFO: strPath.Format("%s\\RECIPE_INFO.csv", (m_bLC_Mode == _SEAL ? DIRECTORY_SEAL : DIRECTORY_LC));
+		break;
+	case _CSV_ADDDEL_INFO: strPath.Format("%s\\ADD_DEL_OX_INFO.csv", (m_bLC_Mode == _SEAL ? DIRECTORY_SEAL : DIRECTORY_LC));
+		break;
+	case _CSV_ALIGN_INFO: strPath.Format("%s\\ALIGN_INFO.csv", (m_bLC_Mode == _SEAL ? DIRECTORY_SEAL : DIRECTORY_LC));
+		break;
+	case _CSV_SCAN_INFO: strPath.Format("%s\\SCAN_INFO.csv", (m_bLC_Mode == _SEAL ? DIRECTORY_SEAL : DIRECTORY_LC));
+		break;
+	case _CSV_COUNT_RESULT: strPath.Format("%s\\DROP_COUNT_RESULT.csv", (m_bLC_Mode == _SEAL ? DIRECTORY_SEAL : DIRECTORY_LC));
+		break;
+	case _CSV_INSP_RESULT: strPath.Format("%s\\LINE_INSP_RESULT.csv", (m_bLC_Mode == _SEAL ? DIRECTORY_SEAL : DIRECTORY_LC));
+		break;
+	default: return;
+	}
+	::DeleteFile(strPath);
+}
+

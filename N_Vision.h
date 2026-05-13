@@ -1,0 +1,478 @@
+// N_Vision.h: interface for the CN_Vision class.
+//
+//////////////////////////////////////////////////////////////////////
+
+#if !defined(AFX_N_VISION_H__09C274EC_3B9E_4235_849C_B94606BAA7E8__INCLUDED_)
+#define AFX_N_VISION_H__09C274EC_3B9E_4235_849C_B94606BAA7E8__INCLUDED_
+
+#if _MSC_VER > 1000
+#pragma once
+#endif // _MSC_VER > 1000
+#define MAX_VISION			3 // Yamary...20140507
+#define MAX_CELL			300
+#define MAX_LINE			150
+#define MAX_DUMMY			100
+#define MAX_AU				100
+#define MAX_ADDDEL_POINT	200
+#define MAX_DROP			10000
+#define RES_ERR_TIMEOVER	-1000
+#define RES_ERR_DISMATCH	-1001
+#define RES_ERR_NG			-1002
+#define RES_ERR_CONNECT		-1003
+
+typedef enum _MACHINE_KIND
+{
+	_SEAL = 0,
+	_LC,
+}MACHINE_KIND;
+
+typedef enum _RCV_MSG
+{
+	_RCV_RES_FILE_PATH = 0,
+	_RCV_RES_FILE_READ,
+	_RCV_RES_START_INSP,
+	_RCV_RES_STATUS,
+	_RCV_RES_STOP,
+	_RCV_REQ_COUNT_RESULT,
+	_RCV_REQ_INSP_RESULT,
+}RCV_MSG;
+
+typedef enum _SEND_MSG
+{
+	_SEND_NOT_FILE_PATH = 0,
+	_SEND_REQ_FILE_READ,
+	_SEND_REQ_START_INSP,
+	_SEND_REQ_STATUS,
+	_SEND_NOT_STOP,
+	_SEND_RES_COUNT_RESULT,
+	_SEND_RES_INSP_RESULT,
+	_SEND_RES_TRACE_RESULT,
+}SEND_MSG;
+
+typedef enum _FILE_NAME
+{
+	_CSV_CELL_INFO = 0,
+//161214 VISION PART SCAN
+	_CSV_CELL_INFO_N_GANTRY,
+
+	_CSV_RECIPE_INFO,
+	_CSV_ADDDEL_INFO,
+	_CSV_ALIGN_INFO,
+	_CSV_SCAN_INFO,
+	_CSV_THRESHOLD_INFO, //160903 DUAL INTENSITY //160929 JYKIM
+	_CSV_COUNT_RESULT,
+	_CSV_INSP_RESULT,
+	_CSV_TRACE_RESULT,
+}_FILE_NAME;
+
+typedef enum _RESULT
+{
+	_RESULT_NG = 0,
+	_RESULT_OK,
+	_RESULT_ER,
+}_RESULT;
+
+typedef enum _VISION_ERR
+{
+	_VISION_ERR_NOTHING = 0,
+	_VISION_ERR_CONNECT,
+	_VISION_ERR_NG,
+	_VISION_ERR_TIMEOVER,
+	_VISION_ERR_DISMACH,
+	_VISION_ERR_MANU,
+}_VISION_ERR;
+
+typedef enum _VISION_RESULT_ERR
+{
+	_RESULT_ERR_NOTHING = 0,
+	_RESULT_ERR_NO_FILE, // File 이 없음...
+	_RESULT_ERR_READ, // 읽기 실패 .. 통신 불량 등의 문제인듯...  //jykim 171218 VisionAlarm구분 정상화 1,2번 순서 바꿈
+	_RESULT_ERR_NG, // Vision 에서 NG 때렸음...
+	_RESULT_ERR_CELL_COUNT, // CELL 개수가 안맞음...
+	_RESULT_ERR_CELL_SEQ, // CELL 순서가 안맞음...
+//220603 BIG DROP DETECT ( (OLD) DEEP DROP ) 
+	_RESULT_ERR_BIG_DROP, // DEEP DROP 검출
+//220603 BIG DROP DETECT ( (OLD) DEEP DROP ) 
+}_VISION_RESULT_ERR;
+
+typedef struct tagCell_Info_Lc
+{
+	int m_nDrop_Count[MAX_CELL];
+	int m_nDrop_Count_Y[MAX_CELL];
+	int m_nLine_Count[MAX_CELL];
+	double m_dX_Center_Pos[MAX_CELL][MAX_LINE];
+	double m_dLine_Y[MAX_CELL][MAX_LINE];
+	double m_dStart_X[MAX_CELL];
+	double m_dStart_Y[MAX_CELL];
+	double m_dEnd_X[MAX_CELL];
+	double m_dEnd_Y[MAX_CELL];
+	double m_dSealLine_Start_X[MAX_CELL];
+	double m_dSealLine_Start_Y[MAX_CELL];
+	double m_dSealLine_End_X[MAX_CELL];
+	double m_dSealLine_End_Y[MAX_CELL];
+	int m_nHead_Line[MAX_CELL][MAX_NOZZLE]; //WINGS VISION ADD
+
+	CString m_strCell_ID[MAX_CELL];
+
+//161214 VISION PART SCAN //JYKIM 161219 PART SCAN 180K 
+	int m_nPointHeadInform [MAX_CELL][MAX_LINE];
+	int m_nPointYshotInform[MAX_CELL][MAX_LINE]; 
+
+}CELL_INFO_LC;
+
+typedef struct tagRecipe_Info_Lc
+{
+	CString m_strRecipe_No;
+	CString m_strRecipe_Name;
+	int m_nTotal_Permit_Over; // Cell 영역 전체...
+	int m_nTotal_Permit_Miss; // Cell 영역 전체...
+	int m_nCell_Permit_Over;
+	int m_nCell_Permit_Miss;
+	UINT m_nIntensity[MAX_VISION]; // Yamary...20140507
+	UINT m_nEdge_Intnsity;
+	double m_dDrop_Size_X[MAX_VISION];
+	double m_dDrop_Size_Y[MAX_VISION];
+	UINT m_nNozzle_No;
+	double m_dNozzle_Pitch;
+	int m_nK_Vel;
+	double m_dDist_Permit_X;
+	double m_dDist_Permit_Y;
+	int m_nGlass_Permit_Over;
+	int m_nSeal_Permit_Over;
+	BOOL m_bReverse; // 1 : 반전 , 0 : 비반전 ...
+	BOOL m_bEdge_Reverse; // 1 : 반전 , 0 : 비반전 ...
+	int m_nLight_Con; // 조명 밝기... 마이너스 값이면 Vision 설정 값 적용... ( 0 ~ 255 )
+	double m_dGlass_Size_X;
+	double m_dGlass_Size_Y;
+	double m_dCell_Rate;
+	double m_dEdge_Size;
+	double m_dDrop_Close[MAX_VISION];
+
+	int m_nCirculaty;
+	int m_nDetect_Rate;
+
+//160909 DUAL INTENSITY 개선 //160929 JYKIM
+	int m_bDualIntensity; 
+
+//220603 BIG DROP DETECT ( (OLD) DEEP DROP ) 
+	int m_nDetectBigDrop_Rate[MAX_VISION];
+	int m_nDropSizeRate_X; 
+	int m_nDropSizeRate_Y; 
+//220603 BIG DROP DETECT ( (OLD) DEEP DROP ) 
+
+}RECIPE_INFO_LC;
+
+typedef struct tagAddDel_Info_Lc
+{
+	int m_nAdd_Del_Point[MAX_CELL];
+	BOOL m_bOx[MAX_CELL]; // TRUE : O , FALSE : X
+	double m_dAxis_X[MAX_CELL][MAX_ADDDEL_POINT];
+	double m_dAxis_Y[MAX_CELL][MAX_ADDDEL_POINT];
+	BOOL m_bAdd_Del[MAX_CELL][MAX_ADDDEL_POINT]; // TRUE : ADD, FALSE : DEL
+}ADDDEL_INFO_LC;
+
+typedef struct tagAlign_Info
+{
+	double m_dOffset_X;
+	double m_dOffset_Y;
+}ALIGN_INFO;
+
+typedef struct tagCount_Result
+{
+	BOOL m_bResult;
+	CString m_strGlass_ID;
+	UINT m_nTotal_Drop_Number; // Cell 전체
+	UINT m_nTotal_Drop_Count; // Cell 전체
+	int m_nTotal_Judge; // Cell 전체 Judge 1 : OK, 0 : NG , 2 : ERROR
+	UINT m_nGlass_Over_Count; // Glass 영역
+	BOOL m_bGlass_Judge; // Glass 영역 Judge
+	UINT m_nSeal_Over_Count[MAX_CELL]; // Seal Line 영역
+	BOOL m_bSeal_Judge[MAX_CELL]; // Seal Line 영역 Judge
+	UINT m_nCell_Drop_Number[MAX_CELL];
+	UINT m_nCell_Drop_Count[MAX_CELL];
+	BOOL m_bCell_Judge[MAX_CELL];
+	int m_nOver_Count[MAX_CELL];
+	int m_nMiss_Count[MAX_CELL];
+	double m_dOver_Pos_X[MAX_CELL][MAX_DROP];
+	double m_dOver_Pos_Y[MAX_CELL][MAX_DROP];
+	double m_dMiss_Pos_X[MAX_CELL][MAX_DROP];
+	double m_dMiss_Pos_Y[MAX_CELL][MAX_DROP];
+	CString m_str_Reason;
+	double m_dGlass_Left_Up_X;
+	double m_dGlass_Left_Up_Y;
+	double m_dGlass_Right_Up_X;
+	double m_dGlass_Right_Up_Y;
+	double m_dGlass_Left_Down_X;
+	double m_dGlass_Left_Down_Y;
+	double m_dGlass_Right_Down_X;
+	double m_dGlass_Right_Down_Y;
+
+//220603 BIG DROP DETECT ( (OLD) DEEP DROP ) 
+	int m_nDeep_Count[MAX_CELL];
+	double m_dDetectMax[MAX_VISION];
+//220603 BIG DROP DETECT ( (OLD) DEEP DROP ) 
+
+}COUNT_RESULT;
+
+typedef struct tagScan_Info
+{
+	BOOL m_bDir_TTB; // TRUE : TTB , FALSE : BTT
+	double m_dDistance;
+	double m_dStartPos;
+//	BOOL m_bCalibration; //JYKIM 161129 PART SCAN 임시 지움 180K
+	int  m_nPartScanmode;
+	int  m_nPartScanCount; 
+	BOOL m_bScanDirection; // TRUE : RIGHT , FALSE : LEFT
+}SCAN_INFO;
+
+typedef struct tagCell_Info_Seal
+{
+	int m_nCell_Count;
+	int m_nDummy_Count;
+	int m_nAu_Count;
+	int m_nLine_Count_Cell[MAX_CELL];
+	int m_nCorner_Count_Cell[MAX_CELL];
+	double m_dVertex_Area_Cell[MAX_CELL];
+	double m_dSearch_Area_Cell[MAX_CELL];
+	double m_dMax_Line_Width_Cell[MAX_CELL];
+	double m_dMin_Line_Width_Cell[MAX_CELL];
+	double m_dMax_Corner_Width_Cell[MAX_CELL];
+	double m_dMin_Corner_Width_Cell[MAX_CELL];
+	double m_dMax_Overlap_Width_Cell[MAX_CELL];
+	double m_dMin_Overlap_Width_Cell[MAX_CELL];
+	int m_nCorner_Divid_Cell[MAX_CELL];
+	double m_dStart_X_Cell[MAX_CELL][MAX_LINE];
+	double m_dStart_Y_Cell[MAX_CELL][MAX_LINE];
+	double m_dEnd_X_Cell[MAX_CELL][MAX_LINE];
+	double m_dEnd_Y_Cell[MAX_CELL][MAX_LINE];
+	double m_dRadius_Cell[MAX_CELL][MAX_LINE];
+	
+	double m_dStart_Error_Dummy[MAX_DUMMY];
+	double m_dEnd_Error_Dummy[MAX_DUMMY];
+	int m_nLine_Count_Dummy[MAX_DUMMY];
+	int m_nCorner_Count_Dummy[MAX_DUMMY];
+	double m_dVertex_Area_Dummy[MAX_DUMMY];
+	double m_dSearch_Area_Dummy[MAX_DUMMY];
+	double m_dMax_Line_Width_Dummy[MAX_DUMMY];
+	double m_dMin_Line_Width_Dummy[MAX_DUMMY];
+	double m_dMax_Corner_Width_Dummy[MAX_DUMMY];
+	double m_dMin_Corner_Width_Dummy[MAX_DUMMY];
+	double m_dMax_Overlap_Width_Dummy[MAX_DUMMY];
+	double m_dMin_Overlap_Width_Dummy[MAX_DUMMY];
+	int m_nCorner_Divid_Dummy[MAX_DUMMY];
+	double m_dStart_X_Dummy[MAX_DUMMY][MAX_LINE];
+	double m_dStart_Y_Dummy[MAX_DUMMY][MAX_LINE];
+	double m_dEnd_X_Dummy[MAX_DUMMY][MAX_LINE];
+	double m_dEnd_Y_Dummy[MAX_DUMMY][MAX_LINE];
+	double m_dRadius_Dummy[MAX_DUMMY][MAX_LINE];
+	
+	double m_dX_Point_Au[MAX_AU];
+	double m_dY_Point_Au[MAX_AU];
+	double m_dX_Search_Area_Au[MAX_AU];
+	double m_dY_Search_Area_Au[MAX_AU];
+	double m_dMax_Dia_X_Au[MAX_AU];
+	double m_dMax_Dia_Y_Au[MAX_AU];
+	double m_dMin_Dia_X_Au[MAX_AU];
+	double m_dMin_Dia_Y_Au[MAX_AU];
+	
+}CELL_INFO_SEAL;
+
+typedef struct tagRecipe_Info_Seal
+{
+	CString m_strRecipe_No;
+	CString m_strRecipe_Name;
+	double m_dGlass_Size_X;
+	double m_dGlass_Size_Y;
+	double m_dPos_Accu_Permit_X;
+	double m_dPos_Accu_Permit_Y;
+	BOOL m_bUse_Trace_Cell;
+	BOOL m_bUse_Trace_Dummy;
+	double m_dDist_Trace_Cell;
+	double m_dDist_Trace_Dummy;
+	UINT m_nIntensity_Line;
+	UINT m_nIntensity_Part;
+	double m_dSize_X_Part;
+	double m_dSize_Y_Part;
+	int m_nK_Vel;
+	BOOL m_bReverse; // 1 : 반전 , 0 : 비반전 ...
+	double m_dBreak_Width;
+	double m_dBreak_Dist;
+	int m_nLight_Con; // 조명 밝기... 마이너스 값이면 Vision 설정 값 적용... ( 0 ~ 255 )
+	double m_dWidth_Size;
+	double m_dVertex_Size;
+	UINT m_nEdge_Intnsity;
+	double m_dEdge_Size;
+	BOOL m_bEdge_Reverse; // 1 : 반전 , 0 : 비반전 ...
+
+}RECIPE_INFO_SEAL;
+
+typedef struct tagInsp_Result
+{
+	BOOL m_bResult;
+	CString m_strGlass_ID;
+	UINT m_nCell_No;
+	UINT m_nCell_Total_Break;
+	UINT m_nCell_Total_Wide;
+	UINT m_nCell_Total_Narrow;
+	double m_dCell_Shift_X[MAX_CELL];
+	double m_dCell_Shift_Y[MAX_CELL];
+	UINT m_nCell_Break[MAX_CELL];
+	UINT m_nCell_Wide[MAX_CELL];
+	UINT m_nCell_Narrow[MAX_CELL];
+	UINT m_nCell_Vertex[MAX_CELL];
+	
+	double m_dCell_Break_Start_X[MAX_CELL][MAX_LINE];
+	double m_dCell_Break_Start_Y[MAX_CELL][MAX_LINE];
+	double m_dCell_Break_End_X[MAX_CELL][MAX_LINE];
+	double m_dCell_Break_End_Y[MAX_CELL][MAX_LINE];
+	double m_dCell_Wide_Start_X[MAX_CELL][MAX_LINE];
+	double m_dCell_Wide_Start_Y[MAX_CELL][MAX_LINE];
+	double m_dCell_Wide_End_X[MAX_CELL][MAX_LINE];
+	double m_dCell_Wide_End_Y[MAX_CELL][MAX_LINE];
+	double m_dCell_Narrow_Start_X[MAX_CELL][MAX_LINE];
+	double m_dCell_Narrow_Start_Y[MAX_CELL][MAX_LINE];
+	double m_dCell_Narrow_End_X[MAX_CELL][MAX_LINE];
+	double m_dCell_Narrow_End_Y[MAX_CELL][MAX_LINE];
+	double m_dCell_Vertex_Start_X[MAX_CELL][MAX_LINE];
+	double m_dCell_Vertex_Start_Y[MAX_CELL][MAX_LINE];
+	double m_dCell_Vertex_End_X[MAX_CELL][MAX_LINE];
+	double m_dCell_Vertex_End_Y[MAX_CELL][MAX_LINE];
+	
+	UINT m_nDummy_No;
+	UINT m_nDummy_Total_Break;
+	UINT m_nDummy_Total_Wide;
+	UINT m_nDummy_Total_Narrow;
+	double m_dDummy_Shift_X[MAX_CELL];
+	double m_dDummy_Shift_Y[MAX_CELL];
+	UINT m_nDummy_Break[MAX_CELL];
+	UINT m_nDummy_Wide[MAX_CELL];
+	UINT m_nDummy_Narrow[MAX_CELL];
+	UINT m_nDummy_Vertex[MAX_CELL];
+	
+	double m_dDummy_Break_Start_X[MAX_CELL][MAX_LINE];
+	double m_dDummy_Break_Start_Y[MAX_CELL][MAX_LINE];
+	double m_dDummy_Break_End_X[MAX_CELL][MAX_LINE];
+	double m_dDummy_Break_End_Y[MAX_CELL][MAX_LINE];
+	double m_dDummy_Wide_Start_X[MAX_CELL][MAX_LINE];
+	double m_dDummy_Wide_Start_Y[MAX_CELL][MAX_LINE];
+	double m_dDummy_Wide_End_X[MAX_CELL][MAX_LINE];
+	double m_dDummy_Wide_End_Y[MAX_CELL][MAX_LINE];
+	double m_dDummy_Narrow_Start_X[MAX_CELL][MAX_LINE];
+	double m_dDummy_Narrow_Start_Y[MAX_CELL][MAX_LINE];
+	double m_dDummy_Narrow_End_X[MAX_CELL][MAX_LINE];
+	double m_dDummy_Narrow_End_Y[MAX_CELL][MAX_LINE];
+	double m_dDummy_Vertex_Start_X[MAX_CELL][MAX_LINE];
+	double m_dDummy_Vertex_Start_Y[MAX_CELL][MAX_LINE];
+	double m_dDummy_Vertex_End_X[MAX_CELL][MAX_LINE];
+	double m_dDummy_Vertex_End_Y[MAX_CELL][MAX_LINE];
+	
+	UINT m_nAu_No;
+	double m_dAu_Shift_X[MAX_AU];
+	double m_dAu_Shift_Y[MAX_AU];
+	BOOL m_bAu_Over[MAX_AU];
+	BOOL m_bAu_Under[MAX_AU];
+	
+	CString m_str_Reason;
+	double m_dGlass_Left_Up_X;
+	double m_dGlass_Left_Up_Y;
+	double m_dGlass_Right_Up_X;
+	double m_dGlass_Right_Up_Y;
+	double m_dGlass_Left_Down_X;
+	double m_dGlass_Left_Down_Y;
+	double m_dGlass_Right_Down_X;
+	double m_dGlass_Right_Down_Y;
+}INSP_RESULT;
+
+typedef struct tagTrace_Result
+{
+	BOOL m_bResult;
+	CString m_strGlass_ID;
+	UINT m_nCell_No;
+	UINT m_nTrace_No[MAX_CELL];
+	UINT m_nCorner_No[MAX_CELL];
+	double m_dLine_Start_X[MAX_CELL][MAX_LINE];
+	double m_dLine_Start_Y[MAX_CELL][MAX_LINE];
+	double m_dLine_End_X[MAX_CELL][MAX_LINE];
+	double m_dLine_End_Y[MAX_CELL][MAX_LINE];
+	double m_dLine_Width_Max[MAX_CELL][MAX_LINE];
+	double m_dLine_Width_Min[MAX_CELL][MAX_LINE];
+	double m_dLine_Width_Avr[MAX_CELL][MAX_LINE];
+	
+	double m_dCorner_Start_X[MAX_CELL][MAX_LINE];
+	double m_dCorner_Start_Y[MAX_CELL][MAX_LINE];
+	double m_dCorner_End_X[MAX_CELL][MAX_LINE];
+	double m_dCorner_End_Y[MAX_CELL][MAX_LINE];
+	double m_dCorner_Width_Max[MAX_CELL][MAX_LINE];
+	double m_dCorner_Width_Min[MAX_CELL][MAX_LINE];
+	double m_dCorner_Width_Avr[MAX_CELL][MAX_LINE];
+	CString m_str_Reason;
+	
+}TRACE_RESULT;
+
+typedef struct tagVision_Status
+{
+	BOOL m_bComm_Ok; // Communication OK...
+	int m_nError_Code;
+	BOOL m_bNormal_Stop;
+}VISION_STATUS;
+
+//160903 DUAL INTENSITY //160929 JYKIM
+typedef struct tagthreshold_info
+{
+	UINT m_nIntensityLow [MAX_VISION];
+	UINT m_nIntensityHigh[MAX_VISION];	
+	double m_dDrop_Size_X_Low[MAX_VISION];
+	double m_dDrop_Size_X_High[MAX_VISION];
+	double m_dDrop_Size_Y_Low[MAX_VISION];
+	double m_dDrop_Size_Y_High[MAX_VISION];
+}TRESHOLD_INFO;
+
+class CN_Vision  
+{
+public:
+	BOOL m_bLC_Mode;
+	void Engine_End();
+	BOOL Engine_Start();
+	void Delete_CSV_File(int nKind);
+	void Save_Vision_Log(CString strText);
+	BOOL Init_N_Vision();
+	CString SendMsg_to_Vision(int nKind, CString strCont, int *nRet);
+	void GetMsg_from_Vision(CString strTotal);
+	int m_nCellCount;
+	int Read_CSV_File(CString strFileName, int nKind);
+	int Read_CSV_File(int nKind);
+	BOOL Write_CSV_File(int nKind);
+	void Cal_Time();
+	WORD wMinute;
+	WORD wSec;
+	WORD wMSec;
+	UINT nCount;
+// 구조체...
+	VISION_STATUS		m_structVision_Status;
+	ALIGN_INFO			m_structAlign_Info;
+	COUNT_RESULT		m_structCount_Result;
+	CELL_INFO_LC		m_structCell_Info_Lc;
+	RECIPE_INFO_LC		m_structRecipe_Info_Lc;
+	ADDDEL_INFO_LC		m_structDrop_Info_Lc;
+	SCAN_INFO			m_structScan_Info;
+	CELL_INFO_SEAL		m_structCell_Info_Seal;
+	RECIPE_INFO_SEAL	m_structRecipe_Info_Seal;
+	INSP_RESULT			m_structInsp_Result;
+	TRACE_RESULT		m_structTrace_Result;
+
+//160807 DUAL INTENSITY	//160903 DUAL INTENSITY //160929 JYKIM
+	TRESHOLD_INFO		m_structThreshold_Info; 
+////////////////////////////////////////////////////////////////
+	CN_Vision();
+	virtual ~CN_Vision();
+
+protected:
+	int OnConnect_NetDriver();
+	int CommLibMsgSend(CString strMsgTmp);
+	int CommLibOpenPort();
+	int CommLibClosePort();
+	int CommLibEngineStart(BOOL bStart);
+
+};
+
+#endif // !defined(AFX_N_VISION_H__09C274EC_3B9E_4235_849C_B94606BAA7E8__INCLUDED_)

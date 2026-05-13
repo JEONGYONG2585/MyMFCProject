@@ -1,0 +1,1787 @@
+// ManuVision.cpp : implementation file
+//
+
+#include "stdafx.h"
+#include "p8ca_lcdisp.h"
+#include "MainFrm.h"
+#include "P8CA_LcDispView.h"
+#include "P8CA_LcDispDoc.h"
+#include "ManuVision.h"
+#include "N_Vision.h"
+//#include "ProcessMsg.h"
+#include "Vision_Result.h"
+#include "Lclib.h"
+#include "NormalMsg.h"
+
+#ifdef _DEBUG
+#define new DEBUG_NEW
+#undef THIS_FILE
+static char THIS_FILE[] = __FILE__;
+#endif
+
+#define _AUTO	0
+/////////////////////////////////////////////////////////////////////////////
+// CManuVision dialog
+
+extern CN_Vision _NVision;
+extern BOOL g_bRcvMsg;
+extern CString g_strRcv_Sub;
+extern CString g_strRcv_Cont;
+
+extern double DIST_S1;	
+extern double DIST_S2;	
+extern double DIST_S3;	
+extern double DIST_S4;	
+extern double DIST_S5;	
+extern double DIST_S6;	
+extern double DIST_S7;	
+extern double DIST_S8;	
+extern double DIST_S9;	
+extern double DIST_S10;	
+extern double DIST_S11;	
+extern double DIST_S12;	
+
+CManuVision::CManuVision(CWnd* pParent /*=NULL*/)
+	: CDialog(CManuVision::IDD, pParent)
+{
+	//{{AFX_DATA_INIT(CManuVision)
+	m_nMode = -1;
+	m_strMsg = _T("");
+	m_bRcvMsgTimeOver = FALSE;
+	//}}AFX_DATA_INIT
+	m_nCal_Head = 0;
+	m_dS_Start = 0.0;
+	m_dK_Start = 0.0;
+	m_dK_End = 0.0;
+	m_nS_Count = 0;
+	m_dS_Dist = 0.0;
+	m_dAmount = 0.0;
+}
+
+
+void CManuVision::DoDataExchange(CDataExchange* pDX)
+{
+	CDialog::DoDataExchange(pDX);
+	//{{AFX_DATA_MAP(CManuVision)
+	DDX_Radio(pDX, IDC_RADIO_AUTO, m_nMode);
+	DDX_Control(pDX, IDC_OFFSET1, m_ctrlH1);
+	DDX_Control(pDX, IDC_OFFSET10, m_ctrlH10);
+	DDX_Control(pDX, IDC_OFFSET11, m_ctrlH11);
+	DDX_Control(pDX, IDC_OFFSET12, m_ctrlH12);
+	DDX_Control(pDX, IDC_OFFSET2, m_ctrlH2);
+	DDX_Control(pDX, IDC_OFFSET3, m_ctrlH3);
+	DDX_Control(pDX, IDC_OFFSET4, m_ctrlH4);
+	DDX_Control(pDX, IDC_OFFSET5, m_ctrlH5);
+	DDX_Control(pDX, IDC_OFFSET6, m_ctrlH6);
+	DDX_Control(pDX, IDC_OFFSET7, m_ctrlH7);
+	DDX_Control(pDX, IDC_OFFSET8, m_ctrlH8);
+	DDX_Control(pDX, IDC_OFFSET9, m_ctrlH9);
+	DDX_Control(pDX, IDC_HEAD_NO, m_ctrlHead);
+	DDX_Control(pDX, IDC_S_START, m_ctrlS_Start);
+	DDX_Control(pDX, IDC_K_START_POS, m_ctrlK_Start);
+	DDX_Control(pDX, IDC_K_END_POS, m_ctrlK_End);
+	DDX_Control(pDX, IDC_S_MOVE_COUNT, m_ctrlS_Count);
+	DDX_Control(pDX, IDC_S_MOVE_DIST, m_ctrlS_Dist);
+	DDX_Control(pDX, IDC_DROP_AMOUNT, m_ctrlAmount);
+	DDX_Control(pDX, IDC_OFFSET13, m_ctrlH13);
+	DDX_Control(pDX, IDC_OFFSET14, m_ctrlH14);
+	DDX_Control(pDX, IDC_OFFSET15, m_ctrlH15);
+	DDX_Control(pDX, IDC_OFFSET16, m_ctrlH16);
+	DDX_Control(pDX, IDC_OFFSET_X1, m_ctrlX1);
+	DDX_Control(pDX, IDC_OFFSET_X10, m_ctrlX10);
+	DDX_Control(pDX, IDC_OFFSET_X11, m_ctrlX11);
+	DDX_Control(pDX, IDC_OFFSET_X12, m_ctrlX12);
+	DDX_Control(pDX, IDC_OFFSET_X13, m_ctrlX13);
+	DDX_Control(pDX, IDC_OFFSET_X14, m_ctrlX14);
+	DDX_Control(pDX, IDC_OFFSET_X15, m_ctrlX15);
+	DDX_Control(pDX, IDC_OFFSET_X16, m_ctrlX16);
+	DDX_Control(pDX, IDC_OFFSET_X2, m_ctrlX2);
+	DDX_Control(pDX, IDC_OFFSET_X3, m_ctrlX3);
+	DDX_Control(pDX, IDC_OFFSET_X4, m_ctrlX4);
+	DDX_Control(pDX, IDC_OFFSET_X5, m_ctrlX5);
+	DDX_Control(pDX, IDC_OFFSET_X6, m_ctrlX6);
+	DDX_Control(pDX, IDC_OFFSET_X7, m_ctrlX7);
+	DDX_Control(pDX, IDC_OFFSET_X8, m_ctrlX8);
+	DDX_Control(pDX, IDC_OFFSET_X9, m_ctrlX9);
+	DDX_Control(pDX, IDC_OFFSET_Y_L1, m_ctrlYL1);
+	DDX_Control(pDX, IDC_OFFSET_Y_L10, m_ctrlYL10);
+	DDX_Control(pDX, IDC_OFFSET_Y_L11, m_ctrlYL11);
+	DDX_Control(pDX, IDC_OFFSET_Y_L12, m_ctrlYL12);
+	DDX_Control(pDX, IDC_OFFSET_Y_L13, m_ctrlYL13);
+	DDX_Control(pDX, IDC_OFFSET_Y_L14, m_ctrlYL14);
+	DDX_Control(pDX, IDC_OFFSET_Y_L15, m_ctrlYL15);
+	DDX_Control(pDX, IDC_OFFSET_Y_L16, m_ctrlYL16);
+	DDX_Control(pDX, IDC_OFFSET_Y_L2, m_ctrlYL2);
+	DDX_Control(pDX, IDC_OFFSET_Y_L3, m_ctrlYL3);
+	DDX_Control(pDX, IDC_OFFSET_Y_L4, m_ctrlYL4);
+	DDX_Control(pDX, IDC_OFFSET_Y_L5, m_ctrlYL5);
+	DDX_Control(pDX, IDC_OFFSET_Y_L6, m_ctrlYL6);
+	DDX_Control(pDX, IDC_OFFSET_Y_L7, m_ctrlYL7);
+	DDX_Control(pDX, IDC_OFFSET_Y_L8, m_ctrlYL8);
+	DDX_Control(pDX, IDC_OFFSET_Y_L9, m_ctrlYL9);
+	//}}AFX_DATA_MAP
+}
+
+
+BEGIN_MESSAGE_MAP(CManuVision, CDialog)
+	//{{AFX_MSG_MAP(CManuVision)
+	ON_WM_TIMER()
+	//}}AFX_MSG_MAP
+END_MESSAGE_MAP()
+
+/////////////////////////////////////////////////////////////////////////////
+// CManuVision message handlers
+
+BOOL CManuVision::OnInitDialog() 
+{
+	CString str;
+	CMainFrame *pFrame = (CMainFrame *)AfxGetMainWnd();
+	CP8CA_LcDispDoc *pDoc = (CP8CA_LcDispDoc *)pFrame->GetActiveDocument();
+	CP8CA_LcDispView* pView = (CP8CA_LcDispView*)pFrame->GetActiveView();
+	
+	SelectLanguage();
+
+	// Recipe Name 설정
+	str.Format("%s|%s", pDoc->m_structOperatorModeRecipeData.strFrontRecipeName, pDoc->m_structOperatorModeRecipeData.strBackRecipeName);
+	
+	SetDlgItemText(IDC_LABEL_RECIPE_NAME, str);
+
+	if(pDoc->m_structDataEditor.m_bUse_Vision)
+	{
+		_NVision.Engine_End();
+		_NVision.Engine_Start();
+		if(_NVision.Init_N_Vision()) _NVision.m_structVision_Status.m_bComm_Ok = TRUE;
+		else
+		{
+			pView->SendMessage(WM_VISION_INIT,NULL,NULL);		//ehji 140926 vision retry 초기화.
+
+			if(!_NVision.Init_N_Vision())
+			{
+				SendMessage(WM_ERROR, 401, NULL);
+				_NVision.m_structVision_Status.m_bComm_Ok = FALSE;
+			}
+		}
+		pDoc->Read_Vision_Y_Offset(); //CELL FOR VISION 전 Y OFFSET READ
+		pDoc->Read_Vision_X_Offset();	//ehji 141025
+
+		pDoc->Make_Cell_for_Vision();
+		pDoc->Make_Recipe_for_Vision();
+	}
+
+	Read_Cal();
+	OnDisp_Param();
+	m_nMode = 0;
+
+	GetDlgItem(IDC_S_START)->SetWindowPos( NULL,0,0,0,0, SWP_NOMOVE | SWP_SHOWWINDOW | SWP_NOZORDER );
+	GetDlgItem(IDC_K_END_POS)->SetWindowPos( NULL,0,0,0,0, SWP_NOMOVE | SWP_SHOWWINDOW | SWP_NOZORDER );
+	GetDlgItem(IDC_HEAD_NO)->SetWindowPos( NULL,0,0,0,0, SWP_NOMOVE | SWP_SHOWWINDOW | SWP_NOZORDER );
+	GetDlgItem(IDC_READOUT24)->SetWindowPos( NULL,0,0,0,0, SWP_NOMOVE | SWP_SHOWWINDOW | SWP_NOZORDER );
+	GetDlgItem(IDC_READOUT25)->SetWindowPos( NULL,0,0,0,0, SWP_NOMOVE | SWP_SHOWWINDOW | SWP_NOZORDER );
+	GetDlgItem(IDC_READOUT26)->SetWindowPos( NULL,0,0,0,0, SWP_NOMOVE | SWP_SHOWWINDOW | SWP_NOZORDER );
+	GetDlgItem(IDC_READOUT27)->SetWindowPos( NULL,0,0,0,0, SWP_NOMOVE | SWP_SHOWWINDOW | SWP_NOZORDER );
+	GetDlgItem(IDC_READOUT28)->SetWindowPos( NULL,0,0,0,0, SWP_NOMOVE | SWP_SHOWWINDOW | SWP_NOZORDER );
+	GetDlgItem(IDC_LABEL107)->SetWindowPos( NULL,0,0,0,0, SWP_NOMOVE | SWP_SHOWWINDOW | SWP_NOZORDER );
+	GetDlgItem(IDC_LABEL108)->SetWindowPos( NULL,0,0,0,0, SWP_NOMOVE | SWP_SHOWWINDOW | SWP_NOZORDER );
+	GetDlgItem(IDC_LABEL109)->SetWindowPos( NULL,0,0,0,0, SWP_NOMOVE | SWP_SHOWWINDOW | SWP_NOZORDER );
+	GetDlgItem(IDC_LABEL110)->SetWindowPos( NULL,0,0,0,0, SWP_NOMOVE | SWP_SHOWWINDOW | SWP_NOZORDER );
+	GetDlgItem(IDC_LABEL111)->SetWindowPos( NULL,0,0,0,0, SWP_NOMOVE | SWP_SHOWWINDOW | SWP_NOZORDER );
+	GetDlgItem(IDC_LABEL112)->SetWindowPos( NULL,0,0,0,0, SWP_NOMOVE | SWP_SHOWWINDOW | SWP_NOZORDER );
+	GetDlgItem(IDC_LABEL113)->SetWindowPos( NULL,0,0,0,0, SWP_NOMOVE | SWP_SHOWWINDOW | SWP_NOZORDER );
+	GetDlgItem(IDC_K_START_POS)->SetWindowPos( NULL,0,0,0,0, SWP_NOMOVE | SWP_SHOWWINDOW | SWP_NOZORDER );
+	GetDlgItem(IDC_S_MOVE_COUNT)->SetWindowPos( NULL,0,0,0,0, SWP_NOMOVE | SWP_SHOWWINDOW | SWP_NOZORDER );
+	GetDlgItem(IDC_S_MOVE_DIST)->SetWindowPos( NULL,0,0,0,0, SWP_NOMOVE | SWP_SHOWWINDOW | SWP_NOZORDER );
+	GetDlgItem(IDC_DROP_AMOUNT)->SetWindowPos( NULL,0,0,0,0, SWP_NOMOVE | SWP_SHOWWINDOW | SWP_NOZORDER );
+	GetDlgItem(IDC_CAL_START)->SetWindowPos( NULL,0,0,0,0, SWP_NOMOVE | SWP_SHOWWINDOW | SWP_NOZORDER );
+
+	GetDlgItem(IDC_OFFSET_Y_L1)->SetWindowPos( NULL,0,0,0,0, SWP_NOMOVE | SWP_SHOWWINDOW | SWP_NOZORDER );
+	GetDlgItem(IDC_OFFSET_Y_L2)->SetWindowPos( NULL,0,0,0,0, SWP_NOMOVE | SWP_SHOWWINDOW | SWP_NOZORDER );
+	GetDlgItem(IDC_OFFSET_Y_L3)->SetWindowPos( NULL,0,0,0,0, SWP_NOMOVE | SWP_SHOWWINDOW | SWP_NOZORDER );
+	GetDlgItem(IDC_OFFSET_Y_L4)->SetWindowPos( NULL,0,0,0,0, SWP_NOMOVE | SWP_SHOWWINDOW | SWP_NOZORDER );
+	GetDlgItem(IDC_OFFSET_Y_L5)->SetWindowPos( NULL,0,0,0,0, SWP_NOMOVE | SWP_SHOWWINDOW | SWP_NOZORDER );
+	GetDlgItem(IDC_OFFSET_Y_L6)->SetWindowPos( NULL,0,0,0,0, SWP_NOMOVE | SWP_SHOWWINDOW | SWP_NOZORDER );
+	GetDlgItem(IDC_OFFSET_Y_L7)->SetWindowPos( NULL,0,0,0,0, SWP_NOMOVE | SWP_SHOWWINDOW | SWP_NOZORDER );
+	GetDlgItem(IDC_OFFSET_Y_L8)->SetWindowPos( NULL,0,0,0,0, SWP_NOMOVE | SWP_SHOWWINDOW | SWP_NOZORDER );
+	GetDlgItem(IDC_OFFSET_Y_L9)->SetWindowPos( NULL,0,0,0,0, SWP_NOMOVE | SWP_SHOWWINDOW | SWP_NOZORDER );
+	GetDlgItem(IDC_OFFSET_Y_L10)->SetWindowPos( NULL,0,0,0,0, SWP_NOMOVE | SWP_SHOWWINDOW | SWP_NOZORDER );
+	GetDlgItem(IDC_OFFSET_Y_L11)->SetWindowPos( NULL,0,0,0,0, SWP_NOMOVE | SWP_SHOWWINDOW | SWP_NOZORDER );
+	GetDlgItem(IDC_OFFSET_Y_L12)->SetWindowPos( NULL,0,0,0,0, SWP_NOMOVE | SWP_SHOWWINDOW | SWP_NOZORDER );
+	GetDlgItem(IDC_OFFSET_Y_L13)->SetWindowPos( NULL,0,0,0,0, SWP_NOMOVE | SWP_SHOWWINDOW | SWP_NOZORDER );
+	GetDlgItem(IDC_OFFSET_Y_L14)->SetWindowPos( NULL,0,0,0,0, SWP_NOMOVE | SWP_SHOWWINDOW | SWP_NOZORDER );
+	GetDlgItem(IDC_OFFSET_Y_L15)->SetWindowPos( NULL,0,0,0,0, SWP_NOMOVE | SWP_SHOWWINDOW | SWP_NOZORDER );
+	GetDlgItem(IDC_OFFSET_Y_L16)->SetWindowPos( NULL,0,0,0,0, SWP_NOMOVE | SWP_SHOWWINDOW | SWP_NOZORDER );
+
+
+
+
+
+	UpdateData(FALSE);
+#if EQ
+	SetTimer(0, 500, NULL);
+#endif
+	CDialog::OnInitDialog();	
+	
+	return TRUE;  // return TRUE unless you set the focus to a control
+	              // EXCEPTION: OCX Property Pages should return FALSE
+}
+
+void CManuVision::OnDisp_Param()
+{
+	CMainFrame *pFrame = (CMainFrame*)AfxGetMainWnd();
+	CP8CA_LcDispDoc *pDoc = (CP8CA_LcDispDoc*)pFrame->GetActiveDocument();
+	
+	CString str;
+	str.Format("%d", _NVision.m_structRecipe_Info_Lc.m_nTotal_Permit_Over);
+	SetDlgItemText(IDC_TOTAL_OVER, str);
+	str.Format("%d", _NVision.m_structRecipe_Info_Lc.m_nTotal_Permit_Miss);
+	SetDlgItemText(IDC_TOTAL_MISS, str);
+	str.Format("%d", _NVision.m_structRecipe_Info_Lc.m_nCell_Permit_Over);
+	SetDlgItemText(IDC_CELL_OVER, str);
+	str.Format("%d", _NVision.m_structRecipe_Info_Lc.m_nCell_Permit_Miss);
+	SetDlgItemText(IDC_CELL_MISS, str);
+	str.Format("%.1f", _NVision.m_structRecipe_Info_Lc.m_dCell_Rate);
+	SetDlgItemText(IDC_READOUT, str);
+	str.Format("%.3f", _NVision.m_structRecipe_Info_Lc.m_dDrop_Size_X);
+	SetDlgItemText(IDC_SIZEX, str);
+	str.Format("%.3f", _NVision.m_structRecipe_Info_Lc.m_dDrop_Size_Y);
+	SetDlgItemText(IDC_SIZEY, str);
+	str.Format("%.3f", _NVision.m_structRecipe_Info_Lc.m_dDist_Permit_X);
+	SetDlgItemText(IDC_SCAN_RANGE_X, str);
+	str.Format("%.3f", _NVision.m_structRecipe_Info_Lc.m_dDist_Permit_Y);
+	SetDlgItemText(IDC_SCAN_RANGE_Y, str);
+	str.Format("%d", _NVision.m_structRecipe_Info_Lc.m_nIntensity[0]); // Yamary...20140507
+	SetDlgItemText(IDC_INTENSITY, str);
+	str.Format("%d", _NVision.m_structRecipe_Info_Lc.m_nIntensity[1]); // Yamary...20140507
+	SetDlgItemText(IDC_INTENSITY2, str);
+	str.Format("%d", _NVision.m_structRecipe_Info_Lc.m_nIntensity[2]); // Yamary...20140507
+	SetDlgItemText(IDC_INTENSITY3, str);
+	str.Format("%d", _NVision.m_structRecipe_Info_Lc.m_nLight_Con);
+	SetDlgItemText(IDC_LIGHT, str);
+
+	str.Format("%.3f", _NVision.m_structScan_Info.m_dStartPos);
+	SetDlgItemText(IDC_START_GLASS, str);
+
+ 	str.Format("%d", (int)((pDoc->m_dTeachData[20][1] + _NVision.m_structScan_Info.m_dStartPos)*1000.0));
+ 	SetDlgItemText(IDC_START_PULSE, str);
+
+	str.Format("%d", _NVision.m_structRecipe_Info_Lc.m_nK_Vel);
+	SetDlgItemText(IDC_SPEED, str);
+
+	str.Format("%.3f", _NVision.m_structScan_Info.m_dDistance);
+	SetDlgItemText(IDC_DISTANCE, str);
+	_NVision.m_structScan_Info.m_bDir_TTB ? str = "TTB" : str = "BTT";
+	SetDlgItemText(IDC_DIRECTION, str);
+
+	for(int i = 0; i < MAX_NOZZLE; i++)
+	{
+		str.Format("%.3f", pDoc->m_dVision_Y_Offset[i]);
+		SetDlgItemText(IDC_OFFSET1+i, str);
+	}
+	str.Format("%d", m_nCal_Head);
+	SetDlgItemText(IDC_HEAD_NO, str);
+	str.Format("%.3f", m_dS_Start);
+	SetDlgItemText(IDC_S_START, str);
+	str.Format("%.3f", m_dK_Start);
+	SetDlgItemText(IDC_K_START_POS, str);
+	str.Format("%.3f", m_dK_End);
+	SetDlgItemText(IDC_K_END_POS, str);
+	str.Format("%d", m_nS_Count);
+	SetDlgItemText(IDC_S_MOVE_COUNT, str);
+	str.Format("%.3f", m_dS_Dist);
+	SetDlgItemText(IDC_S_MOVE_DIST, str);
+	str.Format("%.3f", m_dAmount);
+	SetDlgItemText(IDC_DROP_AMOUNT, str);
+
+
+	str.Format("%.2f",pDoc->m_dVision_Y_Offset[0]); 
+	SetDlgItemText(IDC_OFFSET1, str);
+	str.Format("%.2f",pDoc->m_dVision_Y_Offset[1]); 
+	SetDlgItemText(IDC_OFFSET2, str);
+	str.Format("%.2f",pDoc->m_dVision_Y_Offset[2]); 
+	SetDlgItemText(IDC_OFFSET3, str);
+	str.Format("%.2f",pDoc->m_dVision_Y_Offset[3]); 
+	SetDlgItemText(IDC_OFFSET4, str);
+	str.Format("%.2f",pDoc->m_dVision_Y_Offset[4]); 
+	SetDlgItemText(IDC_OFFSET5, str);
+	str.Format("%.2f",pDoc->m_dVision_Y_Offset[5]); 
+	SetDlgItemText(IDC_OFFSET6, str);
+	str.Format("%.2f",pDoc->m_dVision_Y_Offset[6]); 
+	SetDlgItemText(IDC_OFFSET7, str);
+	str.Format("%.2f",pDoc->m_dVision_Y_Offset[7]); 
+	SetDlgItemText(IDC_OFFSET8, str);
+	str.Format("%.2f",pDoc->m_dVision_Y_Offset[8]); 
+	SetDlgItemText(IDC_OFFSET9, str);
+	str.Format("%.2f",pDoc->m_dVision_Y_Offset[9]); 
+	SetDlgItemText(IDC_OFFSET10, str);	
+	str.Format("%.2f",pDoc->m_dVision_Y_Offset[10]); 
+	SetDlgItemText(IDC_OFFSET11, str);
+	str.Format("%.2f",pDoc->m_dVision_Y_Offset[11]); 
+	SetDlgItemText(IDC_OFFSET12, str);
+	str.Format("%.2f",pDoc->m_dVision_Y_Offset[12]); 
+	SetDlgItemText(IDC_OFFSET13, str);
+	str.Format("%.2f",pDoc->m_dVision_Y_Offset[13]); 
+	SetDlgItemText(IDC_OFFSET14, str);
+	str.Format("%.2f",pDoc->m_dVision_Y_Offset[14]); 
+	SetDlgItemText(IDC_OFFSET15, str);
+	str.Format("%.2f",pDoc->m_dVision_Y_Offset[15]); 
+	SetDlgItemText(IDC_OFFSET16, str);
+
+	str.Format("%.2f",pDoc->m_dVision_X_Offset[0]);		//ehji 141025
+	SetDlgItemText(IDC_OFFSET_X1, str);
+	str.Format("%.2f",pDoc->m_dVision_X_Offset[1]); 
+	SetDlgItemText(IDC_OFFSET_X2, str);
+	str.Format("%.2f",pDoc->m_dVision_X_Offset[2]); 
+	SetDlgItemText(IDC_OFFSET_X3, str);
+	str.Format("%.2f",pDoc->m_dVision_X_Offset[3]); 
+	SetDlgItemText(IDC_OFFSET_X4, str);
+	str.Format("%.2f",pDoc->m_dVision_X_Offset[4]); 
+	SetDlgItemText(IDC_OFFSET_X5, str);
+	str.Format("%.2f",pDoc->m_dVision_X_Offset[5]); 
+	SetDlgItemText(IDC_OFFSET_X6, str);
+	str.Format("%.2f",pDoc->m_dVision_X_Offset[6]); 
+	SetDlgItemText(IDC_OFFSET_X7, str);
+	str.Format("%.2f",pDoc->m_dVision_X_Offset[7]); 
+	SetDlgItemText(IDC_OFFSET_X8, str);
+	str.Format("%.2f",pDoc->m_dVision_X_Offset[8]); 
+	SetDlgItemText(IDC_OFFSET_X9, str);
+	str.Format("%.2f",pDoc->m_dVision_X_Offset[9]); 
+	SetDlgItemText(IDC_OFFSET_X10, str);	
+	str.Format("%.2f",pDoc->m_dVision_X_Offset[10]); 
+ 	SetDlgItemText(IDC_OFFSET_X11, str);
+	str.Format("%.2f",pDoc->m_dVision_X_Offset[11]); 
+	SetDlgItemText(IDC_OFFSET_X12, str);
+	str.Format("%.2f",pDoc->m_dVision_X_Offset[12]); 
+	SetDlgItemText(IDC_OFFSET_X13, str);
+	str.Format("%.2f",pDoc->m_dVision_X_Offset[13]); 
+	SetDlgItemText(IDC_OFFSET_X14, str);
+	str.Format("%.2f",pDoc->m_dVision_X_Offset[14]); 
+	SetDlgItemText(IDC_OFFSET_X15, str);
+	str.Format("%.2f",pDoc->m_dVision_X_Offset[15]); 
+	SetDlgItemText(IDC_OFFSET_X16, str);
+
+}
+
+BEGIN_EVENTSINK_MAP(CManuVision, CDialog)
+    //{{AFX_EVENTSINK_MAP(CManuVision)
+	ON_EVENT(CManuVision, IDC_INITIAL, -600 /* Click */, OnClickInitial, VTS_NONE)
+	ON_EVENT(CManuVision, IDC_WRITE_PATH, -600 /* Click */, OnClickWritePath, VTS_NONE)
+	ON_EVENT(CManuVision, IDC_WRITE_RECIPE, -600 /* Click */, OnClickWriteRecipe, VTS_NONE)
+	ON_EVENT(CManuVision, IDC_WRITE_CELL, -600 /* Click */, OnClickWriteCell, VTS_NONE)
+	ON_EVENT(CManuVision, IDC_MOVING, -600 /* Click */, OnClickMoving, VTS_NONE)
+	ON_EVENT(CManuVision, IDC_RETURN, -600 /* Click */, OnClickReturn, VTS_NONE)
+	ON_EVENT(CManuVision, IDC_OFFSET1, -600 /* Click */, OnClickOffset1, VTS_NONE)
+	ON_EVENT(CManuVision, IDC_OFFSET2, -600 /* Click */, OnClickOffset2, VTS_NONE)
+	ON_EVENT(CManuVision, IDC_OFFSET3, -600 /* Click */, OnClickOffset3, VTS_NONE)
+	ON_EVENT(CManuVision, IDC_OFFSET4, -600 /* Click */, OnClickOffset4, VTS_NONE)
+	ON_EVENT(CManuVision, IDC_OFFSET5, -600 /* Click */, OnClickOffset5, VTS_NONE)
+	ON_EVENT(CManuVision, IDC_OFFSET6, -600 /* Click */, OnClickOffset6, VTS_NONE)
+	ON_EVENT(CManuVision, IDC_OFFSET7, -600 /* Click */, OnClickOffset7, VTS_NONE)
+	ON_EVENT(CManuVision, IDC_OFFSET8, -600 /* Click */, OnClickOffset8, VTS_NONE)
+	ON_EVENT(CManuVision, IDC_OFFSET9, -600 /* Click */, OnClickOffset9, VTS_NONE)
+	ON_EVENT(CManuVision, IDC_OFFSET10, -600 /* Click */, OnClickOffset10, VTS_NONE)
+	ON_EVENT(CManuVision, IDC_OFFSET11, -600 /* Click */, OnClickOffset11, VTS_NONE)
+	ON_EVENT(CManuVision, IDC_OFFSET12, -600 /* Click */, OnClickOffset12, VTS_NONE)
+	ON_EVENT(CManuVision, IDC_SAVE_OFFSET, -600 /* Click */, OnClickSaveOffset, VTS_NONE)
+	ON_EVENT(CManuVision, IDC_TITLE, -601 /* DblClick */, OnDblClickTitle, VTS_DISPATCH)
+	ON_EVENT(CManuVision, IDC_CAL_START, -600 /* Click */, OnClickCalStart, VTS_NONE)
+	ON_EVENT(CManuVision, IDC_HEAD_NO, -600 /* Click */, OnClickHeadNo, VTS_NONE)
+	ON_EVENT(CManuVision, IDC_S_START, -600 /* Click */, OnClickSStart, VTS_NONE)
+	ON_EVENT(CManuVision, IDC_K_START_POS, -600 /* Click */, OnClickKStartPos, VTS_NONE)
+	ON_EVENT(CManuVision, IDC_K_END_POS, -600 /* Click */, OnClickKEndPos, VTS_NONE)
+	ON_EVENT(CManuVision, IDC_S_MOVE_COUNT, -600 /* Click */, OnClickSMoveCount, VTS_NONE)
+	ON_EVENT(CManuVision, IDC_S_MOVE_DIST, -600 /* Click */, OnClickSMoveDist, VTS_NONE)
+	ON_EVENT(CManuVision, IDC_DROP_AMOUNT, -600 /* Click */, OnClickDropAmount, VTS_NONE)
+	ON_EVENT(CManuVision, IDC_OFFSET13, -600 /* Click */, OnClickOffset13, VTS_NONE)
+	ON_EVENT(CManuVision, IDC_OFFSET14, -600 /* Click */, OnClickOffset14, VTS_NONE)
+	ON_EVENT(CManuVision, IDC_OFFSET15, -600 /* Click */, OnClickOffset15, VTS_NONE)
+	ON_EVENT(CManuVision, IDC_OFFSET16, -600 /* Click */, OnClickOffset16, VTS_NONE)
+	ON_EVENT(CManuVision, IDC_OFFSET_X1, -600 /* Click */, OnClickOffsetX1, VTS_NONE)
+	ON_EVENT(CManuVision, IDC_OFFSET_X2, -600 /* Click */, OnClickOffsetX2, VTS_NONE)
+	ON_EVENT(CManuVision, IDC_OFFSET_X3, -600 /* Click */, OnClickOffsetX3, VTS_NONE)
+	ON_EVENT(CManuVision, IDC_OFFSET_X4, -600 /* Click */, OnClickOffsetX4, VTS_NONE)
+	ON_EVENT(CManuVision, IDC_OFFSET_X5, -600 /* Click */, OnClickOffsetX5, VTS_NONE)
+	ON_EVENT(CManuVision, IDC_OFFSET_X6, -600 /* Click */, OnClickOffsetX6, VTS_NONE)
+	ON_EVENT(CManuVision, IDC_OFFSET_X7, -600 /* Click */, OnClickOffsetX7, VTS_NONE)
+	ON_EVENT(CManuVision, IDC_OFFSET_X8, -600 /* Click */, OnClickOffsetX8, VTS_NONE)
+	ON_EVENT(CManuVision, IDC_OFFSET_X9, -600 /* Click */, OnClickOffsetX9, VTS_NONE)
+	ON_EVENT(CManuVision, IDC_OFFSET_X10, -600 /* Click */, OnClickOffsetX10, VTS_NONE)
+	ON_EVENT(CManuVision, IDC_OFFSET_X11, -600 /* Click */, OnClickOffsetX11, VTS_NONE)
+	ON_EVENT(CManuVision, IDC_OFFSET_X12, -600 /* Click */, OnClickOffsetX12, VTS_NONE)
+	ON_EVENT(CManuVision, IDC_OFFSET_X13, -600 /* Click */, OnClickOffsetX13, VTS_NONE)
+	ON_EVENT(CManuVision, IDC_OFFSET_X14, -600 /* Click */, OnClickOffsetX14, VTS_NONE)
+	ON_EVENT(CManuVision, IDC_OFFSET_X15, -600 /* Click */, OnClickOffsetX15, VTS_NONE)
+	ON_EVENT(CManuVision, IDC_OFFSET_X16, -600 /* Click */, OnClickOffsetX16, VTS_NONE)
+	ON_EVENT(CManuVision, IDC_OFFSET_Y_L1, -600 /* Click */, OnClickOffsetYL1, VTS_NONE)
+	ON_EVENT(CManuVision, IDC_OFFSET_Y_L2, -600 /* Click */, OnClickOffsetYL2, VTS_NONE)
+	ON_EVENT(CManuVision, IDC_OFFSET_Y_L3, -600 /* Click */, OnClickOffsetYL3, VTS_NONE)
+	ON_EVENT(CManuVision, IDC_OFFSET_Y_L4, -600 /* Click */, OnClickOffsetYL4, VTS_NONE)
+	ON_EVENT(CManuVision, IDC_OFFSET_Y_L5, -600 /* Click */, OnClickOffsetYL5, VTS_NONE)
+	ON_EVENT(CManuVision, IDC_OFFSET_Y_L6, -600 /* Click */, OnClickOffsetYL6, VTS_NONE)
+	ON_EVENT(CManuVision, IDC_OFFSET_Y_L7, -600 /* Click */, OnClickOffsetYL7, VTS_NONE)
+	ON_EVENT(CManuVision, IDC_OFFSET_Y_L8, -600 /* Click */, OnClickOffsetYL8, VTS_NONE)
+	ON_EVENT(CManuVision, IDC_OFFSET_Y_L9, -600 /* Click */, OnClickOffsetYL9, VTS_NONE)
+	ON_EVENT(CManuVision, IDC_OFFSET_Y_L10, -600 /* Click */, OnClickOffsetYL10, VTS_NONE)
+	ON_EVENT(CManuVision, IDC_OFFSET_Y_L11, -600 /* Click */, OnClickOffsetYL11, VTS_NONE)
+	ON_EVENT(CManuVision, IDC_OFFSET_Y_L12, -600 /* Click */, OnClickOffsetYL12, VTS_NONE)
+	ON_EVENT(CManuVision, IDC_OFFSET_Y_L13, -600 /* Click */, OnClickOffsetYL13, VTS_NONE)
+	ON_EVENT(CManuVision, IDC_OFFSET_Y_L14, -600 /* Click */, OnClickOffsetYL14, VTS_NONE)
+	ON_EVENT(CManuVision, IDC_OFFSET_Y_L15, -600 /* Click */, OnClickOffsetYL15, VTS_NONE)
+	ON_EVENT(CManuVision, IDC_OFFSET_Y_L16, -600 /* Click */, OnClickOffsetYL16, VTS_NONE)
+	//}}AFX_EVENTSINK_MAP
+END_EVENTSINK_MAP()
+
+void CManuVision::OnClickInitial() 
+{
+	OnBtn_Ctr(FALSE);
+	Sleep(200);
+	_NVision.Engine_End();
+	_NVision.Engine_Start();
+
+	Disp_Progress();
+	if(_NVision.Init_N_Vision())
+		AfxMessageBox("Success!");
+	else AfxMessageBox("Fail!");
+	OnBtn_Ctr(TRUE);
+}
+
+
+void CManuVision::OnClickWritePath() 
+{
+	CMainFrame* pFrame = (CMainFrame*)AfxGetMainWnd();
+	CP8CA_LcDispView* pView = (CP8CA_LcDispView*)pFrame->GetActiveView();
+
+	OnBtn_Ctr(FALSE);
+	Sleep(200);
+	Disp_Progress();
+	CString str = "";
+	CString str1;
+	int nRet;
+	str1 = "D:\\TOP\\N_VISION";
+	if(_NVision.SendMsg_to_Vision(_SEND_NOT_FILE_PATH, str, &nRet).Compare(str1) != 0)
+	{
+		//AfxMessageBox("Vision Send to Dispenser 'NG'");
+		pView->SendMessage(WM_ERROR, 406, NULL);
+	}
+	else if(nRet == RES_ERR_TIMEOVER)
+	{
+		//AfxMessageBox("Response TimeOver!");
+		pView->SendMessage(WM_ERROR, 411, NULL);
+	}
+	else if(nRet == RES_ERR_DISMATCH)
+	{
+		//AfxMessageBox("Sending Title & Receiving Title is different");
+		pView->SendMessage(WM_ERROR, 412, NULL);
+	}
+	else if(nRet < 0)
+	{
+		//AfxMessageBox("Vision Communication Error!");
+		pView->SendMessage(WM_ERROR, 401, NULL);
+	}
+	else
+	{
+		AfxMessageBox("Success");
+	}
+	OnBtn_Ctr(TRUE);
+}
+
+void CManuVision::Disp_Progress()
+{
+//	CProcessMsg ProgressDlg;
+//	ProgressDlg.Create(IDD_MSG_PROCESS, this);
+//	ProgressDlg.ShowWindow(SW_SHOW);
+//	ProgressDlg.SetRange(0, 20);
+//	for(int i=0; i <= 20; i++)
+//	{
+//		ProgressDlg.SetPos(i);
+//		Sleep(20);
+//	}
+}
+
+void CManuVision::OnBtn_Ctr(BOOL bOn)
+{
+	CMainFrame *pFrame = (CMainFrame*)AfxGetMainWnd();
+	CCommandButton *pwnd1 = (CCommandButton *)GetDlgItem(IDC_INITIAL);
+	CCommandButton *pwnd2 = (CCommandButton *)GetDlgItem(IDC_WRITE_PATH);
+	CCommandButton *pwnd3 = (CCommandButton *)GetDlgItem(IDC_WRITE_RECIPE);
+	CCommandButton *pwnd4 = (CCommandButton *)GetDlgItem(IDC_WRITE_CELL);
+	CCommandButton *pwnd5 = (CCommandButton *)GetDlgItem(IDC_MOVING);
+	CCommandButton *pwnd6 = (CCommandButton *)GetDlgItem(IDC_RETURN);
+	CCommandButton *pwnd7 = (CCommandButton *)GetDlgItem(IDC_CAL_START);
+	CCommandButton *pwnd8 = (CCommandButton *)GetDlgItem(IDC_SAVE_OFFSET);
+
+	pwnd1->EnableWindow(bOn);
+	pwnd2->EnableWindow(bOn);
+	pwnd3->EnableWindow(bOn);
+	pwnd4->EnableWindow(bOn);
+	pwnd5->EnableWindow(bOn);
+	pwnd6->EnableWindow(bOn);
+	pwnd7->EnableWindow(bOn);
+	pwnd8->EnableWindow(bOn);
+	pFrame->DoEvents();
+}
+
+void CManuVision::OnClickWriteRecipe() 
+{
+	CMainFrame* pFrame = (CMainFrame*)AfxGetMainWnd();
+	CP8CA_LcDispView* pView = (CP8CA_LcDispView*)pFrame->GetActiveView();
+
+	OnBtn_Ctr(FALSE);
+	Sleep(200);
+	Disp_Progress();
+
+	int nRet;
+	CString str = "RECIPE_INFO";
+	
+	_NVision.Write_CSV_File(_CSV_RECIPE_INFO);
+	if(_NVision.SendMsg_to_Vision(_SEND_REQ_FILE_READ, str, &nRet).Compare(str) != 0)
+	{
+		//AfxMessageBox("Vision Send to Dispenser 'NG'");
+		pView->SendMessage(WM_ERROR, 406, NULL);
+	}
+	else if(nRet == RES_ERR_TIMEOVER)
+	{
+		//AfxMessageBox("Response TimeOver!");
+		pView->SendMessage(WM_ERROR, 411, NULL);
+	}
+	else if(nRet == RES_ERR_DISMATCH)
+	{
+		//AfxMessageBox("Sending Title & Receiving Title is different");
+		pView->SendMessage(WM_ERROR, 412, NULL);
+		return;
+	}
+	else if(nRet < 0)
+	{
+		//AfxMessageBox("Vision Communication Error!");
+		pView->SendMessage(WM_ERROR, 401, NULL);
+	}
+	else
+	{
+		AfxMessageBox("Success");
+	}
+
+	OnBtn_Ctr(TRUE);
+}
+
+void CManuVision::OnClickWriteCell() 
+{
+	CMainFrame* pFrame = (CMainFrame*)AfxGetMainWnd();
+	CP8CA_LcDispView* pView = (CP8CA_LcDispView*)pFrame->GetActiveView();
+
+	OnBtn_Ctr(FALSE);
+	Sleep(200);
+	Disp_Progress();
+
+	int nRet;
+	CString str = "CELL_INFO";
+
+	_NVision.Write_CSV_File(_CSV_CELL_INFO);
+	if(_NVision.SendMsg_to_Vision(_SEND_REQ_FILE_READ, str, &nRet).Compare(str) != 0)
+	{
+		//AfxMessageBox("Vision Send to Dispenser 'NG'");
+		pView->SendMessage(WM_ERROR, 406, NULL);
+	}
+	else if(nRet == RES_ERR_TIMEOVER)
+	{
+		//AfxMessageBox("Response TimeOver!");
+		pView->SendMessage(WM_ERROR, 411, NULL);
+	}
+	else if(nRet == RES_ERR_DISMATCH)
+	{
+		//AfxMessageBox("Sending Title & Receiving Title is different");
+		pView->SendMessage(WM_ERROR, 412, NULL);
+	}
+	else if(nRet < 0)
+	{
+		//AfxMessageBox("Vision Communication Error!");
+		pView->SendMessage(WM_ERROR, 401, NULL);
+	}
+	else
+	{
+		AfxMessageBox("SUCCESS");
+	}
+
+	OnBtn_Ctr(TRUE);
+
+}
+
+void CManuVision::OnClickMoving() 
+{
+
+	CMainFrame *pFrame = (CMainFrame*)AfxGetMainWnd();
+	CP8CA_LcDispDoc *pDoc = (CP8CA_LcDispDoc*)pFrame->GetActiveDocument();
+	CP8CA_LcDispView *pView = (CP8CA_LcDispView*)pFrame->GetActiveView();
+
+	CNormalMsg dlg;
+	if( pView->m_nLanguage == 0)
+	{
+		dlg.m_strTitle = "조심하세요..";
+		dlg.m_strMsg1 = "실행하겠습니까?";
+		dlg.m_strMsg2 = "실행하려면 '실행', 아니면 '취소'를 누르십시오.";
+	}
+	else if( pView->m_nLanguage == 1)
+	{
+		dlg.m_strTitle = "be careful..";
+		dlg.m_strMsg1 = "Operate?";
+		dlg.m_strMsg2 = "if you want to operate, Cleck 'Operation' don't want 'Calcel'.";
+	}					 
+	else if( pView->m_nLanguage == 2)
+	{
+		dlg.m_strTitle = "be careful..";
+		dlg.m_strMsg1 = "動作碼?";
+		dlg.m_strMsg2 = "如需執行點擊 'OK', 否則點擊CANCEL.";
+	}
+
+	if(dlg.DoModal() == IDCANCEL) return;
+
+
+	// 일단 상태 check
+	// Home 상태
+#if EQ
+	if(pView->m_pDevice->Robot_arm_check()==TRUE)
+	{
+		//AfxMessageBox("Robot Arm 감지!!");
+		pView->SendMessage(WM_ERROR,104,NULL);
+	    return;
+	}
+// 	if(pView->m_pDevice->Stage_glass_check() == FALSE)
+// 	{
+// 		AfxMessageBox("Stage 위에 Glass 가 없습니다!!");
+// 		return;
+// 	}
+
+// 	if(ThreadStage.nHomeEnableCount < 3)
+// 	{
+// 		pView->PostMessage(WM_ERROR,103,NULL);
+// 		return;
+// 	}
+	
+	// Column Speed 가 너무 크면 안되겠지...
+	if(_NVision.m_structRecipe_Info_Lc.m_nK_Vel > 600)
+	{
+		AfxMessageBox("Moving 속도를 확인하세요!! ( 현재 : %d mm/s )", _NVision.m_structRecipe_Info_Lc.m_nK_Vel);
+		return;
+	}
+#endif
+
+	if(pDoc->m_structDataEditor.m_bUse_Vision)
+	{
+		pDoc->Read_Vision_Y_Offset(); //CELL FOR VISION 전 Y OFFSET READ
+		pDoc->Read_Vision_X_Offset();	//ehji 141025
+		
+		pDoc->Make_Cell_for_Vision();
+		pDoc->Make_Recipe_for_Vision();
+//		Send_Msg_2_Vision(_SEND_NOT_STOP);
+		if(_NVision.m_structVision_Status.m_bComm_Ok == FALSE)
+		{
+			pView->SendMessage(WM_VISION_INIT,NULL,NULL);	//ehji 140804
+//			_NVision.Engine_End();
+//			_NVision.Engine_Start();
+//			if(_NVision.Init_N_Vision()) _NVision.m_structVision_Status.m_bComm_Ok = TRUE;
+//			else _NVision.m_structVision_Status.m_bComm_Ok = FALSE;
+		}
+		if(_NVision.m_structVision_Status.m_bComm_Ok)
+		{
+			pView->Send_Msg_2_Vision(_SEND_NOT_FILE_PATH);
+			_NVision.m_structVision_Status.m_nError_Code = pView->Write_2_Vision(_CSV_CELL_INFO);
+			if(_NVision.m_structVision_Status.m_nError_Code == _VISION_ERR_NOTHING)
+				_NVision.m_structVision_Status.m_nError_Code = pView->Write_2_Vision(_CSV_RECIPE_INFO);
+//			if(Write_2_Vision(_CSV_SCAN_INFO) != _VISION_ERR_NOTHING)
+//			{
+//				AfxMessageBox("SCAN_INFO Write Error!");
+//				return;
+//			}
+		}
+		if(!_NVision.m_structVision_Status.m_bComm_Ok)
+		{
+			SendMessage(WM_ERROR, 401,NULL);
+//			return;
+		}
+		else if(_NVision.m_structVision_Status.m_nError_Code != _VISION_ERR_NOTHING)
+		{
+			AfxMessageBox("Please Send 'CSV File' to Vision in Manual Vision Window");
+			CManuVision dlg;
+			dlg.DoModal();
+//			return;
+		}
+	}
+	
+	OnBtn_Ctr(FALSE);
+
+	CString str , strGlassID = "";
+	int nRet;
+	GetDlgItemText(IDC_START_PULSE, str);
+	double dStart = atof(str);
+	double dStart_Speed = _NVision.m_structRecipe_Info_Lc.m_nK_Vel;
+	GetDlgItemText(IDC_DISTANCE, str);
+	double dMove_Length = atof(str) * K_PULSE;
+	GetDlgItemText(IDC_SPEED, str);
+	double dMove_Speed = atof(str) * K_PULSE;
+	UpdateData(TRUE);
+
+	Sleep(100);
+	FAS_SetIoBit(4, TRUE, VISION_LAMP1, TRUE);  //ehji
+	Sleep(100);
+	FAS_SetIoBit(4, TRUE, VISION_LAMP2, TRUE);  //ehji
+
+	if(!_NVision.m_structScan_Info.m_bDir_TTB) dMove_Length *= (-1);
+	if(m_nMode == _AUTO)
+	{
+		//Start Position 으로 이동...
+		m_strMsg = "Move to Start Position";
+//		FAS_MoveSingleAxisAbsPos(AXIS_Y/BOARD_AXES+1, AXIS_Y%BOARD_AXES, pDoc->m_dTeachData[28][0]*1000, pDoc->m_dTeachData[31][2]*1000, 1);
+		FAS_MoveSingleAxisAbsPos(AXIS_K_MASTER/BOARD_AXES+1, AXIS_K_MASTER%BOARD_AXES, (pDoc->m_dTeachData[17][2])*1000-dStart/**1000*/, dStart_Speed*1000, TRUE);
+		//Write Scan Info...
+		m_strMsg = "Write Scan Information to Vision";
+		if(pView->Write_2_Vision(_CSV_SCAN_INFO) != _VISION_ERR_NOTHING)
+		{
+			//AfxMessageBox("SCAN_INFO Write Error!");
+			pView->SendMessage(WM_ERROR, 402, NULL);
+			OnBtn_Ctr(TRUE);
+			return;
+		}
+		Sleep(500); 
+
+		strGlassID = "MANUAL"; 
+		
+		if(_NVision.SendMsg_to_Vision(_SEND_REQ_START_INSP, strGlassID, &nRet).Compare(strGlassID) != 0)
+		{
+			//AfxMessageBox("Vision Send to Dispenser 'ERROR' (Start Inspection Msg.)");
+			pView->SendMessage(WM_ERROR, 410, NULL);
+			OnBtn_Ctr(TRUE);
+			return;
+		}
+		else if(nRet == RES_ERR_TIMEOVER)
+		{
+			//AfxMessageBox("Response TimeOver!");
+			pView->SendMessage(WM_ERROR, 411, NULL);
+			OnBtn_Ctr(TRUE);
+			return;
+		}
+		else if(nRet == RES_ERR_DISMATCH)
+		{
+			//AfxMessageBox("Sending Title & Receiving Title is different (Start Inspection Msg.)");
+			pView->SendMessage(WM_ERROR, 412, NULL);
+			OnBtn_Ctr(TRUE);
+			return;
+		}
+		else if(nRet < 0)
+		{
+			//AfxMessageBox("Vision Communication Error! (Start Inspection Msg.)");
+			pView->SendMessage(WM_ERROR, 413, NULL);
+			OnBtn_Ctr(TRUE);
+			return;
+		}
+		// Column Moving
+		m_strMsg = "Move to End Position";
+		FAS_MoveSingleAxisIncPos(AXIS_K_MASTER/BOARD_AXES+1, AXIS_K_MASTER%BOARD_AXES, dMove_Length, dMove_Speed, TRUE);
+		
+		m_strMsg = "Send Move Stop Msg to Vision";
+
+#if _SCAN
+		if(_NVision.SendMsg_to_Vision(_SEND_NOT_STOP, "NORMAL", &nRet).Compare("OK") != 0)
+		{
+			//AfxMessageBox("Vision Send to Dispenser 'NG'");
+			pView->SendMessage(WM_ERROR, 406, NULL);
+ 			OnBtn_Ctr(TRUE);
+ 			return;
+		}
+#endif
+// 		else if(nRet == RES_ERR_TIMEOVER)
+// 		{
+// 			AfxMessageBox("Response TimeOver!");
+// 			OnBtn_Ctr(TRUE);
+// 			return;
+// 		}
+// 		else if(nRet == RES_ERR_DISMATCH)
+// 		{
+// 			AfxMessageBox("Sending Title & Receiving Title is different");
+// 			OnBtn_Ctr(TRUE);
+// 			return;
+// 		}
+// 		else if(nRet < 0)
+// 		{
+// 			AfxMessageBox("Vision Communication Error!");
+// 			OnBtn_Ctr(TRUE);
+// 			return;
+// 		}
+		m_bRcvMsgTimeOver = FALSE;
+		g_bRcvMsg = FALSE;
+		SetTimer(1, 60000, NULL);
+		while(1)
+		{
+			if(pView->m_pDevice->SST_Check(STOP_SWITCH))
+				m_bRcvMsgTimeOver = TRUE;
+#if _SCAN
+			if(g_bRcvMsg)
+			{
+				g_bRcvMsg = FALSE;
+				if(g_strRcv_Sub.Compare("LVS_REQ_RESULT_READ") == 0) break;
+			}
+			if (m_bRcvMsgTimeOver == TRUE) break;
+#else
+			g_strRcv_Cont = "DROP_COUNT_RESULT";
+			break;
+#endif			
+			pFrame->DoEvents();
+		}
+		KillTimer(1);
+		if(m_bRcvMsgTimeOver)
+		{
+			//AfxMessageBox("Rcv Result Time Over!");
+			pView->SendMessage(WM_ERROR, 403, NULL);
+		}
+		else if(g_strRcv_Cont.Compare("DROP_COUNT_RESULT") != 0)
+		{
+			//AfxMessageBox("Vision Send 'NG' to Dispenser!");
+			pView->SendMessage(WM_ERROR, 406, NULL);
+		}
+		else
+		{
+			CVision_Result dlg;
+			dlg.DoModal();
+		}
+
+
+		OnBtn_Ctr(TRUE);
+	}
+	else
+	{
+		m_strMsg = "Move to Start Position";
+//		FAS_MoveSingleAxisAbsPos(AXIS_Y/BOARD_AXES+1, AXIS_Y%BOARD_AXES, pDoc->m_dTeachData[28][0]*1000, pDoc->m_dTeachData[31][2]*1000, 1);
+		FAS_MoveSingleAxisAbsPos(AXIS_K_MASTER/BOARD_AXES+1, AXIS_K_MASTER%BOARD_AXES, dStart, dStart_Speed*1000, TRUE);
+		if(AfxMessageBox("Do you want Start 'Scan Job'?", MB_YESNO) == IDNO)
+		{
+			OnBtn_Ctr(TRUE);
+			return;
+		}
+
+		FAS_MoveSingleAxisIncPos(AXIS_K_MASTER/BOARD_AXES+1, AXIS_K_MASTER%BOARD_AXES, dMove_Length, dMove_Speed, TRUE);
+
+		OnBtn_Ctr(TRUE);
+	}
+
+	Sleep(100);
+	FAS_SetIoBit(4, TRUE, VISION_LAMP1, FALSE);  //ehji
+	Sleep(100);
+	FAS_SetIoBit(4, TRUE, VISION_LAMP2, FALSE);  //ehji
+}
+
+void CManuVision::OnTimer(UINT nIDEvent) 
+{
+	switch (nIDEvent)
+	{
+	case 0:	SetDlgItemText(IDC_MSG, m_strMsg);	
+		break;
+	case 1: m_bRcvMsgTimeOver =TRUE;
+		break;
+	}
+	CDialog::OnTimer(nIDEvent);
+}
+
+void CManuVision::OnClickReturn() 
+{
+	KillTimer(0);
+	CDialog::OnOK();	
+}
+
+void CManuVision::OnClickOffset1() 
+{
+	Use_TK(m_ctrlH1,20.0,-20.0,0,0);
+}
+
+void CManuVision::OnClickOffset2() 
+{
+	Use_TK(m_ctrlH2,20.0,-20.0,0,0);
+}
+
+void CManuVision::OnClickOffset3() 
+{
+	Use_TK(m_ctrlH3,20.0,-20.0,0,0);
+}
+
+void CManuVision::OnClickOffset4() 
+{
+	Use_TK(m_ctrlH4,20.0,-20.0,0,0);
+}
+
+void CManuVision::OnClickOffset5() 
+{
+	Use_TK(m_ctrlH5,20.0,-20.0,0,0);
+}
+
+void CManuVision::OnClickOffset6() 
+{
+	Use_TK(m_ctrlH6,20.0,-20.0,0,0);
+}
+
+void CManuVision::OnClickOffset7() 
+{
+	Use_TK(m_ctrlH7,20.0,-20.0,0,0);
+}
+
+void CManuVision::OnClickOffset8() 
+{
+	Use_TK(m_ctrlH8,20.0,-20.0,0,0);
+}
+
+void CManuVision::OnClickOffset9() 
+{
+	Use_TK(m_ctrlH9,20.0,-20.0,0,0);
+}
+
+void CManuVision::OnClickOffset10() 
+{
+	Use_TK(m_ctrlH10,20.0,-20.0,0,0);
+}
+
+void CManuVision::OnClickOffset11() 
+{
+	Use_TK(m_ctrlH11,20.0,-20.0,0,0);
+}
+
+void CManuVision::OnClickOffset12() 
+{
+	Use_TK(m_ctrlH12,20.0,-20.0,0,0);
+}
+
+void CManuVision::OnClickSaveOffset() 
+{
+	CMainFrame *pFrame = (CMainFrame*)AfxGetMainWnd();
+	CP8CA_LcDispDoc *pDoc = (CP8CA_LcDispDoc*)pFrame->GetActiveDocument();
+	CString str;
+	OnBtn_Ctr(FALSE);
+	Sleep(200);
+	Disp_Progress();
+	for(int i = 0; i < MAX_NOZZLE; i++)
+	{
+		GetDlgItemText(IDC_OFFSET1+i, str);
+		pDoc->m_dVision_Y_Offset[i] = atof(str);
+	}
+
+	for(i = 0; i < MAX_NOZZLE; i++)	//ehji 141025
+	{
+		GetDlgItemText(IDC_OFFSET_X1+i, str);
+		pDoc->m_dVision_X_Offset[i] = atof(str);
+	}
+
+	pDoc->Save_Vision_X_Offset(); //ehji 141025
+	pDoc->Save_Vision_Y_Offset();
+	pDoc->Save_Vision_Y_Line_Offset(); 
+	OnBtn_Ctr(TRUE);
+}
+
+void CManuVision::OnDblClickTitle(LPDISPATCH Cancel) 
+{
+	CVision_Result dlg;
+	dlg.DoModal();
+}
+
+void CManuVision::OnClickCalStart() 
+{
+	CNormalMsg dlg;
+	dlg.m_strTitle = "be careful..";
+	dlg.m_strMsg1 = "실행하겠습니까?";
+	dlg.m_strMsg2 = "실행하려면 '실행', 아니면 '취소'를 누르십시오.";
+
+	if(dlg.DoModal() == IDCANCEL) return;
+
+
+
+	CMainFrame *pFrame = (CMainFrame *)AfxGetMainWnd();
+	CP8CA_LcDispDoc *pDoc = (CP8CA_LcDispDoc *)pFrame->GetActiveDocument();
+	CP8CA_LcDispView *pView = (CP8CA_LcDispView *)pFrame->GetActiveView();
+
+	Save_Cal();
+	if(pView->m_pDevice->Robot_arm_check()==TRUE)
+	{
+		AfxMessageBox("Robot Arm 감지!!");
+	    return;
+	}
+// 	if(pView->m_pDevice->Stage_glass_check() == FALSE)
+// 	{
+// 		AfxMessageBox("Stage 위에 Glass 가 없습니다!!");
+// 		return;
+// 	}
+	// Head 가 맞는지?
+	if(m_nCal_Head < 1 || m_nCal_Head >= MAX_NOZZLE)
+	{
+		AfxMessageBox("Head 번호를 확인해 주세요!!");
+		return;
+	}
+	// S Start Position 이 맞는지?
+	if(m_dS_Start < (-1)*(pDoc->m_structDataEditor.m_dGlassSizeX / 2) || m_dS_Start > (pDoc->m_structDataEditor.m_dGlassSizeX / 2))
+	{
+		AfxMessageBox("S축 Start Position 을 확인해 주세요!!");
+		return;
+	}
+	// K Start Position 이 맞는지?
+	if(/*m_dK_Start < 0 ||*/ m_dK_Start > (pDoc->m_structDataEditor.m_dGlassSizeY / 2))
+	{
+		AfxMessageBox("K축 Start Position 을 확인해 주세요!!");
+		return;
+	}
+	// K End Position 이 맞는지?
+	if(m_dK_End < (-1)*(pDoc->m_structDataEditor.m_dGlassSizeY / 2) /*|| m_dK_End > 0*/)
+	{
+		AfxMessageBox("K축 End Position 을 확인해 주세요!!");
+		return;
+	}
+	// Count 개수가 맞는지?
+	if(m_nS_Count < 10 || m_nS_Count > 50)
+	{
+		AfxMessageBox("S 축 이동 횟수를 확인해 주세요!!");
+		return;
+	}
+	// 이동 거리가 맞는지?
+	if(m_dS_Dist < 0)
+	{
+		AfxMessageBox("S 축 이동 거리를 확인해 주세요!!");
+		return;
+	}
+	// P축 Pulse 가 맞는지?
+	if(m_dAmount < 0.5 || m_dAmount > 5.0)
+	{
+		AfxMessageBox("Drop 양을 확인해 주세요!!");
+		return;
+	}
+	
+#if EQ	
+ 	if(ThreadStage.nHomeEnableCount < 3)
+ 	{
+ 		pView->PostMessage(WM_ERROR,103,NULL);
+		return;
+ 	}
+	BOOL bSyncIOResult = pView->m_pDevice->SyncSetIO(SYNC_AXIS_S, 0.0, false, false);
+ 	if(!bSyncIOResult)
+ 	{
+ 		pView->PostMessage(WM_ERROR,111,NULL);
+		return;
+ 	}
+#endif
+	int nHead = m_nCal_Head-1;
+	LONG AxisStatus;
+	double dSPos[MAX_NOZZLE] = {0.0,};
+	double dTemp, dTemp1 = 0.0;
+	BOOL bPosResult = FALSE;
+	CString str;
+	double dP_Pulse = m_dAmount * BASE_PULSE;
+	OnBtn_Ctr(FALSE);
+	m_strMsg = "K축 Moving!";
+	double dKMoveSpd = 200.0;
+	pView->m_pDevice->ColumnPositionMove(m_dK_Start+pDoc->m_dTeachData[17][2],0,dKMoveSpd,0);
+//	FAS_MoveSingleAxisAbsPos(AXIS_Y/BOARD_AXES+1, AXIS_Y%BOARD_AXES, pDoc->m_dTeachData[20][0]*1000, pDoc->m_dTeachData[31][2]*1000, 1);
+
+#if EQ	
+	while(1)
+	{
+		FAS_GetAxisStatus(AXIS_K_MASTER/BOARD_AXES+1, AXIS_K_MASTER%BOARD_AXES, &AxisStatus); 
+		
+		if((AxisStatus & MOTIONING)== FALSE)
+		{
+			break;
+		}
+		pFrame->DoEvents();
+		Sleep(50);
+	}
+
+	
+	m_strMsg = "K축 Position Check!";
+	Sleep(300);
+	bPosResult = pView->m_pDevice->ColumnPosition_Check(m_dK_Start+pDoc->m_dTeachData[17][2],0);
+	if(bPosResult == FALSE)
+	{
+		pView->SendMessage(WM_ERROR,107,NULL);
+		OnBtn_Ctr(TRUE);
+		return;
+	}
+//	Sleep(10);
+//	bPosResult = pView->m_pDevice->StagePosition_Check(pDoc->m_dTeachData[20][0]);
+//	if(bPosResult == FALSE)
+//	{
+//		pView->SendMessage(WM_ERROR,0x23,NULL);
+//		OnBtn_Ctr(TRUE);
+//		return;
+//	}
+#endif
+	int i;
+	for(i=0;i<MAX_NOZZLE;i++)
+	{
+		if(i < NOZZLE_S1)
+		{
+			FAS_MoveToLimit(2,i+4, 50000, 0, 0);
+			Sleep(500);
+		}
+		else
+		{
+			FAS_MoveToLimit(3,i-NOZZLE_S1, 50000, 0, 0);
+			Sleep(500);
+		}
+	}
+	pView->m_pDevice->HeadSMoveDoneCheck();
+    pView->m_pDevice->OriginS_MoveIni();
+//	return;
+	m_strMsg = "S축 원점 동작 중...!";
+	for(i = 0; i < MAX_NOZZLE; i++)
+	{
+		FAS_MoveOriginSingleAxis(pDoc->m_structHeadConfig[i].nS[0],pDoc->m_structHeadConfig[i].nS[1],1);
+//		Sleep(1000);
+	}
+	pView->m_pDevice->HeadSMoveDoneCheck();
+
+	double dSInc=0.0;
+	for(i=MAX_NOZZLE-1;i>=0;i--)//글래스 좌표 & 이동 위치값을 고려하여 조정 할 필요 있다 ...
+	{
+		if(nHead >= i) continue;
+//		dSInc = i*10.0*S_PULSE;
+//		dSInc = i*(m_dS_Dist*(m_nS_Count+1))*S_PULSE;
+
+	    if(i < NOZZLE_S1)
+		{
+			//FAS_MoveSingleAxisIncPos(2,i+4,dSInc,50000.0,0);
+			FAS_MoveToLimit(2,i+4, 70000, 1, 0);
+			Sleep(200);
+		}
+		else
+		{
+			//FAS_MoveSingleAxisIncPos(3,i-NOZZLE_S1,dSInc,50000.0,0);
+			FAS_MoveToLimit(3,i-NOZZLE_S1, 70000, 1, 0);
+			Sleep(200);
+		}
+	}
+	pView->m_pDevice->HeadSMoveDoneCheck();
+
+	pView->m_pDevice->HeadSPositionOffsetRead();
+	if(nHead == 0) dTemp1 = DIST_S1;
+	else if(nHead == 1) dTemp1 = DIST_S2;
+	else if(nHead == 2) dTemp1 = DIST_S3;
+	else if(nHead == 3) dTemp1 = DIST_S4;
+	else if(nHead == 4) dTemp1 = DIST_S5;
+	else if(nHead == 5) dTemp1 = DIST_S6;
+	else if(nHead == 6) dTemp1 = DIST_S7;
+	else if(nHead == 7) dTemp1 = DIST_S8;
+	else if(nHead == 8) dTemp1 = DIST_S9;
+	else if(nHead == 9) dTemp1 = DIST_S10;
+	else if(nHead == 10) dTemp1 = DIST_S11;
+	else if(nHead == 11) dTemp1 = DIST_S12;
+	dSPos[nHead] = m_dS_Start+dTemp1;
+
+	FAS_MoveSingleAxisAbsPos(pDoc->m_structHeadConfig[nHead].nS[0], pDoc->m_structHeadConfig[nHead].nS[1], dSPos[nHead] * S_PULSE, 50000.0, 1);
+
+// 	dTemp = dSPos[nHead] + m_dS_Dist * (m_nS_Count - 1);
+// 	for(int i = 0; i < nHead; i++)
+// 	{
+// 		dSPos[i] = dSPos[nHead] - 130.0*(nHead-i);
+// 	}
+// 	for(i = nHead+1; i < MAX_NOZZLE; i++)
+// 	{
+// 		dSPos[i] = dTemp + 130.0*(i-(nHead+1));
+// 	}
+// 
+// 	if(dSPos[0] < -150.0 || dSPos[MAX_NOZZLE-1] > 1250.0)
+// 	{
+// 		AfxMessageBox("S축이 Limit 에 닿습니다. 확인해 주세요!");
+// 		OnBtn_Ctr(TRUE);
+// 		return;
+// 	}
+// 	
+// 	m_strMsg = "S축 Moving";
+// 	pView->m_pDevice->HeadSPositionMove(dSPos[0], dSPos[1], dSPos[2], dSPos[3],dSPos[4], dSPos[5], dSPos[6], dSPos[7],dSPos[8], dSPos[9], dSPos[10], dSPos[11], FALSE);
+// 	pView->m_pDevice->HeadSMoveDoneCheck();
+// 
+// 	Sleep(200);
+// 	m_strMsg = "S축 Limit Check";
+// 
+// 	for(i = 0; i < MAX_NOZZLE; i++)
+// 	{
+// 		FAS_GetAxisStatus(pDoc->m_structHeadConfig[i].nS[0], pDoc->m_structHeadConfig[i].nS[1], &AxisStatus);
+// 		if(AxisStatus & LIMITDETECT)
+// 		{
+// //			pView->SendMessage(WM_ERROR, 0x25, NULL);
+//  			OnBtn_Ctr(TRUE);
+// 			return;
+// 		}
+// // 		else if(AxisStatus & 0x00000002)
+// // 		{
+// // 			str.Format("%d Head: S 축 Servo Alarm!", i+1);
+// // 			OnBtn_Ctr(TRUE);
+// // 			return;
+// // 		}
+// 	}
+
+	FAS_MoveOriginSingleAxis(pDoc->m_structHeadConfig[nHead].nD[0], pDoc->m_structHeadConfig[nHead].nD[1], TRUE);
+	Sleep(300);
+	FAS_MoveSingleAxisIncPos(pDoc->m_structHeadConfig[nHead].nD[0], pDoc->m_structHeadConfig[nHead].nD[1], -(G_PULSE/2 + Drop_Info.m_nGateOffset[nHead]), pDoc->m_structAdjustCondition.dSpeed*G_PULSE/60, 1);	
+
+	if(pView->GateCloseCheck(nHead) != nHead)
+	{	
+		if(pView->GateOpenCheck(nHead) == nHead)
+		{
+			AfxMessageBox("Gate 이상!");
+			OnBtn_Ctr(TRUE);
+			return;
+		}
+		FAS_MoveSingleAxisIncPos(pDoc->m_structHeadConfig[nHead].nD[0], pDoc->m_structHeadConfig[nHead].nD[1], -(G_PULSE/2 + Drop_Info.m_nGateOffset[nHead]), pDoc->m_structAdjustCondition.dSpeed*G_PULSE/60, 1);	
+		Sleep(100);
+		if(pView->GateCloseCheck(nHead) != nHead)
+		{
+			AfxMessageBox("Gate Close 이상!");
+			OnBtn_Ctr(TRUE);
+			return;
+		}
+	}
+	Sleep(500);
+	double dPos1;
+//		FAS_MoveSingleAxisIncPos(AXIS_G1/BOARD_AXES+1, (AXIS_G1%BOARD_AXES)+nHead, -(G_PULSE/2 + Drop_Info.m_nGateOffset[nHead]), pDoc->m_structAdjustCondition.dSpeed*G_PULSE/60, 1);	
+
+	FAS_SetLocalPara((AXIS_P1+nHead)/BOARD_AXES+1, nHead+AXIS_P1 , 4, 2000); //P축 Start Speed
+	FAS_SetLocalPara((AXIS_P1+nHead)/BOARD_AXES+1, nHead+AXIS_P1 , 5, 3); //P축 Acc Time
+	FAS_SetLocalPara((AXIS_P1+nHead)/BOARD_AXES+1, nHead+AXIS_P1 , 6, 3); //P축 Dec Time	
+
+	
+	FAS_GetActualPos(pDoc->m_structHeadConfig[nHead].nA[0], pDoc->m_structHeadConfig[nHead].nA[1], &dPos1);
+	
+	if(dPos1 > 250000.0)		
+		FAS_MoveSingleAxisAbsPos(pDoc->m_structHeadConfig[nHead].nA[0], pDoc->m_structHeadConfig[nHead].nA[1], 200000.0, pDoc->m_structPatternData[0].m_dSuctionSpeed*1000, TRUE);
+
+#if EQ
+	FAS_GetAxisStatus(pDoc->m_structHeadConfig[nHead].nA[0], pDoc->m_structHeadConfig[nHead].nA[1], &AxisStatus);
+	if(AxisStatus & LIMITDETECT)
+	{
+		AfxMessageBox("P 축 Limit Detect!");
+		OnBtn_Ctr(TRUE);
+		return;
+	}
+	else if(AxisStatus & 0x00000002)
+	{
+		AfxMessageBox("P 축 Servo Alarm");
+		OnBtn_Ctr(TRUE);
+		return;
+	}
+	Sleep(100);
+#endif
+	
+	FAS_MoveSingleAxisIncPos(pDoc->m_structHeadConfig[nHead].nD[0], pDoc->m_structHeadConfig[nHead].nD[1], (G_PULSE/2 + Drop_Info.m_nGateOffset[nHead]), pDoc->m_structAdjustCondition.dSpeed*G_PULSE/60, 1);	
+	if(pView->GateOpenCheck(nHead) != nHead)
+	{
+		AfxMessageBox("Gate Open 이상!");
+		OnBtn_Ctr(TRUE);
+		return;
+	}
+	Sleep(500);
+	FAS_MoveSingleAxisIncPos(pDoc->m_structHeadConfig[nHead].nA[0],pDoc->m_structHeadConfig[nHead].nA[1],dP_Pulse, 300 * 1000.0, 1);
+	FAS_GetAxisStatus(pDoc->m_structHeadConfig[nHead].nA[0], pDoc->m_structHeadConfig[nHead].nA[1], &AxisStatus);
+
+#if EQ
+	if(AxisStatus & LIMITDETECT)
+	{
+		AfxMessageBox("P 축 Limit Detect!");
+		OnBtn_Ctr(TRUE);
+		return;
+	}
+	else if(AxisStatus & 0x00000002)
+	{
+		AfxMessageBox("P 축 Servo Alarm");
+		OnBtn_Ctr(TRUE);
+		return;
+	}
+#endif
+
+	FAS_GetActualPos(pDoc->m_structHeadConfig[nHead].nS[0], pDoc->m_structHeadConfig[nHead].nS[1], &dTemp);
+	str.Format("1 : %.3f", dTemp / S_PULSE - dTemp1);
+	m_strMsg = str;
+
+	for(i = 0; i < m_nS_Count - 1; i++)
+	{
+
+		if(pView->m_pDevice->SST_Check(STOP_SWITCH))
+		{
+			AfxMessageBox("STOP by Stop Switch!");
+			OnBtn_Ctr(TRUE);
+			return;
+		}
+		FAS_MoveSingleAxisIncPos(pDoc->m_structHeadConfig[nHead].nS[0],pDoc->m_structHeadConfig[nHead].nS[1],m_dS_Dist * S_PULSE,50000.0,1);
+		
+		Sleep(500);
+		str.Format("Drop? (%d/%d)",i+1,m_nS_Count);
+//		if(AfxMessageBox(str, MB_YESNO) == IDNO) break;
+		
+		FAS_MoveSingleAxisIncPos(pDoc->m_structHeadConfig[nHead].nA[0],pDoc->m_structHeadConfig[nHead].nA[1],dP_Pulse, 200 * 1000.0, 1);
+		
+		Sleep(500);
+		
+		FAS_GetAxisStatus(pDoc->m_structHeadConfig[nHead].nS[0], pDoc->m_structHeadConfig[nHead].nS[1], &AxisStatus);
+#if EQ
+		if(AxisStatus & LIMITDETECT)
+		{
+			AfxMessageBox("S 축 Limit Detect!");
+			OnBtn_Ctr(TRUE);
+			return;
+		}
+		else if(AxisStatus & 0x00000002)
+		{
+			AfxMessageBox("S 축 Servo Alarm");
+			OnBtn_Ctr(TRUE);
+			return;
+		}
+		FAS_GetAxisStatus(pDoc->m_structHeadConfig[nHead].nA[0], pDoc->m_structHeadConfig[nHead].nA[1], &AxisStatus);
+		if(AxisStatus & LIMITDETECT)
+		{
+			AfxMessageBox("P 축 Limit Detect!");
+			OnBtn_Ctr(TRUE);
+			return;
+		}
+		else if(AxisStatus & 0x00000002)
+		{
+			AfxMessageBox("P 축 Servo Alarm");
+			OnBtn_Ctr(TRUE);
+			return;
+		}
+#endif
+		FAS_GetActualPos(pDoc->m_structHeadConfig[nHead].nS[0], pDoc->m_structHeadConfig[nHead].nS[1], &dTemp);
+		str.Format(", %d : %.3f", i+2, dTemp / S_PULSE - dTemp1);
+		m_strMsg += str;
+		Sleep(500);
+	}
+
+	pView->m_pDevice->ColumnPositionMove((m_dK_End+pDoc->m_dTeachData[17][2]),0,dKMoveSpd,0);
+	
+//	FAS_MoveSingleAxisAbsPos(pDoc->m_structHeadConfig[nHead].nS[0],pDoc->m_structHeadConfig[nHead].nS[1],dSPos[nHead]*S_PULSE,80000.0,0);
+	FAS_MoveSingleAxisAbsPos(pDoc->m_structHeadConfig[nHead].nS[0], pDoc->m_structHeadConfig[nHead].nS[1], dSPos[nHead] * S_PULSE, 50000.0, 1);
+	FAS_WaitMultiMoveDone(1,0x05);
+	
+	FAS_GetAxisStatus(1, 1, &AxisStatus);
+#if EQ
+	if(AxisStatus & LIMITDETECT)
+	{
+		AfxMessageBox("K 축 Limit Detect!");
+		OnBtn_Ctr(TRUE);
+		return;
+	}
+	else if(AxisStatus & 0x00000002)
+	{
+		AfxMessageBox("K 축 Servo Alarm");
+		OnBtn_Ctr(TRUE);
+		return;
+	}
+	FAS_GetAxisStatus(pDoc->m_structHeadConfig[nHead].nS[0], pDoc->m_structHeadConfig[nHead].nS[1], &AxisStatus);
+	if(AxisStatus & LIMITDETECT)
+	{
+		AfxMessageBox("S 축 Limit Detect!");
+		OnBtn_Ctr(TRUE);
+		return;
+	}
+	else if(AxisStatus & 0x00000002)
+	{
+		AfxMessageBox("S 축 Servo Alarm");
+		OnBtn_Ctr(TRUE);
+		return;
+	}
+	Sleep(1000);
+#endif
+
+//	if(AfxMessageBox("마지막 한방울?", MB_YESNO) == IDYES)
+//	{
+		FAS_MoveSingleAxisIncPos(pDoc->m_structHeadConfig[nHead].nA[0],pDoc->m_structHeadConfig[nHead].nA[1],dP_Pulse, 200 * 1000.0, 1);
+		FAS_GetAxisStatus(pDoc->m_structHeadConfig[nHead].nA[0], pDoc->m_structHeadConfig[nHead].nA[1], &AxisStatus);
+#if EQ
+		if(AxisStatus & LIMITDETECT)
+		{
+			AfxMessageBox("P 축 Limit Detect!");
+			OnBtn_Ctr(TRUE);
+			return;
+		}
+		else if(AxisStatus & 0x00000002)
+		{
+			AfxMessageBox("P 축 Servo Alarm");
+			OnBtn_Ctr(TRUE);
+			return;
+		}
+#endif
+		FAS_GetActualPos(pDoc->m_structHeadConfig[nHead].nS[0], pDoc->m_structHeadConfig[nHead].nS[1], &dTemp);
+		str.Format(", Last : %.3f", dTemp / S_PULSE - dTemp1);
+		m_strMsg += str;
+		SetDlgItemText(IDC_LABEL_WARMUP_MSG, str);
+
+//	}
+
+	for(i=0;i<MAX_NOZZLE;i++)
+	{
+		if(i < NOZZLE_S1)
+		{
+			FAS_MoveToLimit(2,i+4, 50000, 0, 0);
+			Sleep(500);
+		}
+		else
+		{
+			FAS_MoveToLimit(3,i-NOZZLE_S1, 50000, 0, 0);
+			Sleep(500);
+		}
+	}
+	pView->m_pDevice->HeadSMoveDoneCheck();
+    pView->m_pDevice->OriginS_MoveIni();
+//	return;
+	m_strMsg = "S축 원점 동작 중...!";
+	for(i = 0; i < MAX_NOZZLE; i++)
+	{
+		FAS_MoveOriginSingleAxis(pDoc->m_structHeadConfig[i].nS[0],pDoc->m_structHeadConfig[i].nS[1],1);
+//		Sleep(1000);
+	}
+	pView->m_pDevice->HeadSMoveDoneCheck();
+	
+	OnBtn_Ctr(TRUE);
+}
+
+void CManuVision::OnClickHeadNo() 
+{
+	Use_TK(m_ctrlHead,MAX_NOZZLE,1,0,0);
+}
+
+void CManuVision::OnClickSStart() 
+{
+	Use_TK(m_ctrlS_Start,1250.0,-1250,0,0);
+}
+
+void CManuVision::OnClickKStartPos() 
+{
+	Use_TK(m_ctrlK_Start,1100.0, -1100.0, 0,0);
+}
+
+void CManuVision::OnClickKEndPos() 
+{
+	Use_TK(m_ctrlK_End,1110.0, -1110.0,0,0);
+}
+
+void CManuVision::OnClickSMoveCount() 
+{
+	Use_TK(m_ctrlS_Count,50,10,0,0);
+}
+
+void CManuVision::OnClickSMoveDist() 
+{
+	Use_TK(m_ctrlS_Dist,1000.0,0.0,0,0);
+}
+
+void CManuVision::OnClickDropAmount() 
+{
+	Use_TK(m_ctrlAmount,5.0,0.5,0,0);
+}
+
+void CManuVision::Save_Cal()
+{
+	CMainFrame *pFrame = (CMainFrame *)AfxGetMainWnd();
+	CP8CA_LcDispDoc *pDoc = (CP8CA_LcDispDoc *)pFrame->GetActiveDocument();
+	FILE *fp;
+	CString strPathName;
+	
+	m_nCal_Head = atoi(m_ctrlHead.GetCaption());
+	m_dS_Start = atof(m_ctrlS_Start.GetCaption());
+	m_dK_Start = atof(m_ctrlK_Start.GetCaption());
+	m_dK_End = atof(m_ctrlK_End.GetCaption());
+	m_nS_Count = atoi(m_ctrlS_Count.GetCaption());
+	m_dS_Dist = atof(m_ctrlS_Dist.GetCaption());
+	m_dAmount = atof(m_ctrlAmount.GetCaption());
+
+
+	strPathName.Format("%s\\Vision_Cal_Param.dat", pDoc->m_strDataPath);
+	fp = fopen((char *)(LPCSTR)strPathName, "wt");
+	
+	if(fp==NULL)
+	{
+		fclose(fp);
+		return;
+	}
+	else
+	{
+		fprintf(fp, "%d\n",m_nCal_Head);
+		fprintf(fp, "%.3f\n",m_dS_Start);
+		fprintf(fp, "%.3f\n",m_dK_Start);
+		fprintf(fp, "%.3f\n",m_dK_End);
+		fprintf(fp, "%d\n",m_nS_Count);
+		fprintf(fp, "%.3f\n",m_dS_Dist);
+		fprintf(fp, "%.3f\n",m_dAmount);
+		fclose(fp);
+	}
+	return;
+}
+
+void CManuVision::Read_Cal()
+{
+	CMainFrame *pFrame = (CMainFrame *)AfxGetMainWnd();
+	CP8CA_LcDispDoc *pDoc = (CP8CA_LcDispDoc *)pFrame->GetActiveDocument();
+	ifstream fi;
+	CString strPathName;
+	CString str;
+	strPathName.Format("%s\\Vision_Cal_Param.dat", pDoc->m_strDataPath);
+	fi.open((char *)(LPCSTR)strPathName, ios::in|ios::nocreate);
+	
+	if(fi.is_open())
+	{
+		fi >> m_nCal_Head;
+		fi >> m_dS_Start;
+		fi >> m_dK_Start;
+		fi >> m_dK_End;
+		fi >> m_nS_Count;
+		fi >> m_dS_Dist;
+		fi >> m_dAmount;
+	}
+	else
+	{
+		fi.close();
+		return;
+	}
+	fi.close();
+}
+
+void CManuVision::OnClickOffset13() 
+{
+	// TODO: Add your control notification handler code here
+	Use_TK(m_ctrlH13,20.0,-20.0,0,0);	
+}
+
+void CManuVision::OnClickOffset14() 
+{
+	// TODO: Add your control notification handler code here
+	Use_TK(m_ctrlH14,20.0,-20.0,0,0);	
+}
+
+void CManuVision::OnClickOffset15() 
+{
+	// TODO: Add your control notification handler code here
+	Use_TK(m_ctrlH15,20.0,-20.0,0,0);	
+}
+
+void CManuVision::OnClickOffset16() 
+{
+	// TODO: Add your control notification handler code here
+	Use_TK(m_ctrlH16,20.0,-20.0,0,0);	
+}
+
+void CManuVision::SelectLanguage()
+{
+	CMainFrame *pFrame = (CMainFrame*)AfxGetMainWnd();
+	CP8CA_LcDispView* pView = (CP8CA_LcDispView*)pFrame->GetActiveView();
+
+	if(pView->m_nLanguage == 0)
+	{
+		SetDlgItemText(IDC_LABEL71,				_T("START 좌표"));
+		SetDlgItemText(IDC_LABEL93,				_T("(Glass 좌표)"));
+		SetDlgItemText(IDC_LABEL94,				_T("(Encoder 값)"));
+		SetDlgItemText(1600,				_T("이동 거리"));
+		SetDlgItemText(IDC_LABEL67,				_T("이동 속도"));
+		SetDlgItemText(1601,				_T("이동 방향"));
+		SetDlgItemText(IDC_INITIAL,				_T("통신 초기화"));
+	}
+
+	else if(pView->m_nLanguage == 1)
+	{
+		SetDlgItemText(IDC_LABEL71,				_T("START Coordinates"));
+		SetDlgItemText(IDC_LABEL93,				_T("(Glass Coordinates)"));
+		SetDlgItemText(IDC_LABEL94,				_T("(Encoder Value)"));
+		SetDlgItemText(1600,				_T("Move Distance"));
+		SetDlgItemText(IDC_LABEL67,				_T("Move Speed"));
+		SetDlgItemText(1601,				_T("Move Direction"));
+		SetDlgItemText(IDC_INITIAL,				_T("Communication Initial"));
+	}
+
+	else if(pView->m_nLanguage == 2)
+	{
+		SetDlgItemText(IDC_LABEL71,				_T("START 坐標"));
+		SetDlgItemText(IDC_LABEL93,				_T("(Glass 坐標)"));
+		SetDlgItemText(IDC_LABEL94,				_T("(Encoder 값)"));
+		SetDlgItemText(1600,				_T("移動距離"));
+		SetDlgItemText(IDC_LABEL67,				_T("移動速度"));
+		SetDlgItemText(1601,				_T("移動方向"));
+		SetDlgItemText(IDC_INITIAL,				_T("通信初期化"));
+	}
+}
+
+void CManuVision::OnClickOffsetX1() 
+{
+	// TODO: Add your control notification handler code here
+	Use_TK(m_ctrlX1,20.0,-20.0,0,0);
+}
+
+void CManuVision::OnClickOffsetX2() 
+{
+	// TODO: Add your control notification handler code here
+	Use_TK(m_ctrlX2,20.0,-20.0,0,0);
+}
+
+void CManuVision::OnClickOffsetX3() 
+{
+	// TODO: Add your control notification handler code here
+	Use_TK(m_ctrlX3,20.0,-20.0,0,0);
+}
+
+void CManuVision::OnClickOffsetX4() 
+{
+	// TODO: Add your control notification handler code here
+	Use_TK(m_ctrlX4,20.0,-20.0,0,0);
+}
+
+void CManuVision::OnClickOffsetX5() 
+{
+	// TODO: Add your control notification handler code here
+	Use_TK(m_ctrlX5,20.0,-20.0,0,0);
+}
+
+void CManuVision::OnClickOffsetX6() 
+{
+	// TODO: Add your control notification handler code here
+	Use_TK(m_ctrlX6,20.0,-20.0,0,0);
+}
+
+void CManuVision::OnClickOffsetX7() 
+{
+	// TODO: Add your control notification handler code here
+	Use_TK(m_ctrlX7,20.0,-20.0,0,0);
+}
+
+void CManuVision::OnClickOffsetX8() 
+{
+	// TODO: Add your control notification handler code here
+	Use_TK(m_ctrlX8,20.0,-20.0,0,0);
+}
+
+void CManuVision::OnClickOffsetX9() 
+{
+	// TODO: Add your control notification handler code here
+	Use_TK(m_ctrlX9,20.0,-20.0,0,0);
+}
+
+void CManuVision::OnClickOffsetX10() 
+{
+	// TODO: Add your control notification handler code here
+	Use_TK(m_ctrlX10,20.0,-20.0,0,0);
+}
+
+void CManuVision::OnClickOffsetX11() 
+{
+	// TODO: Add your control notification handler code here
+	Use_TK(m_ctrlX11,20.0,-20.0,0,0);
+}
+
+void CManuVision::OnClickOffsetX12() 
+{
+	// TODO: Add your control notification handler code here
+	Use_TK(m_ctrlX12,20.0,-20.0,0,0);
+}
+
+void CManuVision::OnClickOffsetX13() 
+{
+	// TODO: Add your control notification handler code here
+	Use_TK(m_ctrlX13,20.0,-20.0,0,0);
+}
+
+void CManuVision::OnClickOffsetX14() 
+{
+	// TODO: Add your control notification handler code here
+	Use_TK(m_ctrlX14,20.0,-20.0,0,0);
+}
+
+void CManuVision::OnClickOffsetX15() 
+{
+	// TODO: Add your control notification handler code here
+	Use_TK(m_ctrlX15,20.0,-20.0,0,0);
+}
+
+void CManuVision::OnClickOffsetX16() 
+{
+	// TODO: Add your control notification handler code here
+	Use_TK(m_ctrlX16,20.0,-20.0,0,0);
+}
+
+void CManuVision::OnClickOffsetYL1() 
+{
+	// TODO: Add your control notification handler code here
+	Use_TK(m_ctrlYL1,20.0,-20.0,0,0);	
+}
+
+void CManuVision::OnClickOffsetYL2() 
+{
+	// TODO: Add your control notification handler code here
+	Use_TK(m_ctrlYL2,20.0,-20.0,0,0);	
+}
+
+void CManuVision::OnClickOffsetYL3() 
+{
+	// TODO: Add your control notification handler code here
+	Use_TK(m_ctrlYL3,20.0,-20.0,0,0);	
+}
+
+void CManuVision::OnClickOffsetYL4() 
+{
+	// TODO: Add your control notification handler code here
+	Use_TK(m_ctrlYL4,20.0,-20.0,0,0);	
+}
+
+void CManuVision::OnClickOffsetYL5() 
+{
+	// TODO: Add your control notification handler code here
+	Use_TK(m_ctrlYL5,20.0,-20.0,0,0);	
+}
+
+void CManuVision::OnClickOffsetYL6() 
+{
+	// TODO: Add your control notification handler code here
+	Use_TK(m_ctrlYL6,20.0,-20.0,0,0);	
+}
+
+void CManuVision::OnClickOffsetYL7() 
+{
+	// TODO: Add your control notification handler code here
+	Use_TK(m_ctrlYL7,20.0,-20.0,0,0);	
+}
+
+void CManuVision::OnClickOffsetYL8() 
+{
+	// TODO: Add your control notification handler code here
+	Use_TK(m_ctrlYL8,20.0,-20.0,0,0);
+}
+
+void CManuVision::OnClickOffsetYL9() 
+{
+	// TODO: Add your control notification handler code here
+	Use_TK(m_ctrlYL9,20.0,-20.0,0,0);	
+}
+
+void CManuVision::OnClickOffsetYL10() 
+{
+	// TODO: Add your control notification handler code here
+	Use_TK(m_ctrlYL10,20.0,-20.0,0,0);	
+}
+
+void CManuVision::OnClickOffsetYL11() 
+{
+	// TODO: Add your control notification handler code here
+	Use_TK(m_ctrlYL11,20.0,-20.0,0,0);	
+}
+
+void CManuVision::OnClickOffsetYL12() 
+{
+	// TODO: Add your control notification handler code here
+	Use_TK(m_ctrlYL12,20.0,-20.0,0,0);	
+}
+
+void CManuVision::OnClickOffsetYL13() 
+{
+	// TODO: Add your control notification handler code here
+	Use_TK(m_ctrlYL13,20.0,-20.0,0,0);	
+}
+
+void CManuVision::OnClickOffsetYL14() 
+{
+	// TODO: Add your control notification handler code here
+	Use_TK(m_ctrlYL14,20.0,-20.0,0,0);	
+}
+
+void CManuVision::OnClickOffsetYL15() 
+{
+	// TODO: Add your control notification handler code here
+	Use_TK(m_ctrlYL15,20.0,-20.0,0,0);	
+}
+
+void CManuVision::OnClickOffsetYL16() 
+{
+	// TODO: Add your control notification handler code here
+	Use_TK(m_ctrlYL16,20.0,-20.0,0,0);	
+}

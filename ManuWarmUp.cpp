@@ -1,0 +1,954 @@
+// ManuWarmUp.cpp : implementation file
+//
+
+#include "stdafx.h"
+#include "P8CA_LcDisp.h"
+#include "MainFrm.h"
+#include "P8CA_LcDispView.h"
+//
+#include "ManuWarmUp.h"
+#include "NormalMsg.h"
+
+#ifdef _DEBUG
+#define new DEBUG_NEW
+#undef THIS_FILE
+static char THIS_FILE[] = __FILE__;
+#endif
+//
+extern THREADSTAGE ThreadStage;
+extern THREADBALANCE ThreadBalance;
+
+//2013.08.03 by tskim
+extern BOOL g_bMMGLineDropMode;
+//
+/////////////////////////////////////////////////////////////////////////////
+// CManuWarmUp dialog
+
+
+CManuWarmUp::CManuWarmUp(CWnd* pParent /*=NULL*/)
+	: CDialog(CManuWarmUp::IDD, pParent)
+{
+	//{{AFX_DATA_INIT(CManuWarmUp)
+	//}}AFX_DATA_INIT
+	m_nModeSelection = 0;
+	//
+	ThreadStage.WarmUpSpeedS = 200.0;
+	ThreadStage.WarmUpSpeedK = 350.0;
+	ThreadStage.WarmUpTimes = 30;
+	ThreadStage.WarmUpStop = FALSE;
+	ThreadStage.WarmUpSettingTime = 50;
+	ThreadStage.WarmUpDummyDrop = FALSE;
+	ThreadStage.WarmUpCount = 0;
+	ThreadStage.WarmUpContiJob = FALSE;
+	m_nActTime = 0;
+	m_nActTimeDisp = 0;
+	m_nActTimeCur = 0;
+	m_nActTimePre = 0;
+
+	//2014.03.10 by tskim //150521 HSN PTP Warmup추가
+	ThreadStage.dWarmUp_KAxis_StepMove_Length = 250;
+	ThreadStage.nWarmUp_KAxis_StepMove_Times = 10;
+	ThreadStage.bWarmUpAxisStepMove[0]=ThreadStage.bWarmUpAxisStepMove[1]=FALSE;
+
+}
+
+CManuWarmUp::~CManuWarmUp()
+{
+}
+
+void CManuWarmUp::DoDataExchange(CDataExchange* pDX)
+{
+	CDialog::DoDataExchange(pDX);
+	//{{AFX_DATA_MAP(CManuWarmUp)
+	DDX_Control(pDX, IDC_TABLE_LOOP_COUNT, m_ctrlTableLoopCount);
+	DDX_Control(pDX, IDC_WARMUP_MODE1, m_ctrlWarmupMode1);
+	DDX_Control(pDX, IDC_WARMUP_MODE2, m_ctrlWarmupMode2);
+	DDX_Control(pDX, IDC_CMD_RETURN, m_ctrlReturn);
+	DDX_Control(pDX, IDC_WARMUP_RUN, m_ctrlWarmupRun);
+	DDX_Control(pDX, IDC_TABLE_MOVE_SPEED2, m_ctrlSAxisMoveSpeed);
+	DDX_Control(pDX, IDC_LABEL_WARMUP_MSG, m_ctrlMessageWarmUp);
+	DDX_Control(pDX, IDC_LABEL_RECIPENAME_WARMUP, m_ctrlRecipeName);
+	DDX_Control(pDX, IDC_WARMUP_MODE3, m_ctrlWarmupMode3);
+	DDX_Control(pDX, IDC_COL_MOVE_SPEED, m_ctrlColAxisMoveSpeed);
+	DDX_Control(pDX, IDC_ACT_TIME, m_ctrlActTime);
+	DDX_Control(pDX, IDC_SETTING_TIME, m_ctrlSettingTime);
+	DDX_Control(pDX, IDC_K_STEP_MOVE_LENGTH, m_ctrlKAxisStepMoveLength);
+	DDX_Control(pDX, IDC_K_STEP_MOVE_TIMES, m_ctrlKAxisStepMoveTimes);
+	//}}AFX_DATA_MAP
+}
+
+
+BEGIN_MESSAGE_MAP(CManuWarmUp, CDialog)
+	//{{AFX_MSG_MAP(CManuWarmUp)
+	ON_WM_TIMER()
+	ON_WM_PAINT()
+	//}}AFX_MSG_MAP
+END_MESSAGE_MAP()
+
+/////////////////////////////////////////////////////////////////////////////
+// CManuWarmUp message handlers
+
+BOOL CManuWarmUp::OnInitDialog() 
+{
+	CDialog::OnInitDialog();
+	
+	// TODO: Add extra initialization here
+//
+	CMainFrame *pFrame = (CMainFrame*)AfxGetMainWnd();
+	CP8CA_LcDispDoc *pDoc = (CP8CA_LcDispDoc*)pFrame->GetActiveDocument();
+	CP8CA_LcDispView *pView = (CP8CA_LcDispView*)pFrame->GetActiveView();
+	CString str="";
+	//
+	OnReadParam();
+	SelectLanguage();
+
+	str.Format("%.0f",ThreadStage.WarmUpSpeedS);
+	m_ctrlSAxisMoveSpeed.SetCaption(str);
+	str.Format("%.0f",ThreadStage.WarmUpSpeedK);
+	m_ctrlColAxisMoveSpeed.SetCaption(str);
+	//
+	str.Format("%d",ThreadStage.WarmUpTimes);
+	m_ctrlTableLoopCount.SetCaption(str);
+	str.Format("%d",ThreadStage.WarmUpSettingTime);
+	m_ctrlSettingTime.SetCaption(str);
+
+//2014.03.10 by tskim  //150521 HSN PTP Warmup추가
+	str.Format("%.0f",ThreadStage.dWarmUp_KAxis_StepMove_Length);
+	m_ctrlKAxisStepMoveLength.SetCaption(str);
+	str.Format("%d",ThreadStage.nWarmUp_KAxis_StepMove_Times);
+	m_ctrlKAxisStepMoveTimes.SetCaption(str);
+
+	
+//
+	str.Format("%s|%s", pDoc->m_structOperatorModeRecipeData.strFrontRecipeName, pDoc->m_structOperatorModeRecipeData.strBackRecipeName);
+	m_ctrlRecipeName.SetCaption(str);
+
+	for(int i=0; i<2; i++)
+	{
+		m_pAxisChoice[i] = (CButton*)GetDlgItem(IDC_CHECK_S+i);
+		m_pAxisChoice[i]->EnableWindow(FALSE);
+		m_pAxisChoice[i]->SetCheck(FALSE);
+
+//2014.03.10 by tskim //150521 HSN PTP Warmup추가 
+		m_pKAxisStepMove = (CButton*)GetDlgItem(IDC_CHECK_K_STEP_MOVE);
+		m_pKAxisStepMove->EnableWindow(FALSE);
+		m_pKAxisStepMove->SetCheck(FALSE);
+		GetDlgItem(IDC_LABEL_K_INTERVAL)->EnableWindow(FALSE);
+		GetDlgItem(IDC_LABEL_K_STEP_MOVETIME)->EnableWindow(FALSE);
+		GetDlgItem(IDC_K_STEP_MOVE_LENGTH)->EnableWindow(FALSE);
+		GetDlgItem(IDC_K_STEP_MOVE_TIMES)->EnableWindow(FALSE);
+	}
+
+	//////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// by ckh 2009.02.16 워밍에서는 무조건 반송 전용으로 하기 위함. 
+	m_bIsTRfOnlyMode_Old = pDoc->m_structDataEditor.m_bIsTrfOnlyMode;
+	pDoc->m_structDataEditor.m_bIsTrfOnlyMode = TRUE;// by ckh 2009.02.16 반송 모드로 변경함. ( 작업자 요청 )
+	//////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	//by shin//2009.08.25//MC 관련 TAS 추가...//
+	//Warm-Up
+	pView->WriteTasMCData(TAS_MC, 13, BIT_ON);
+	Sleep(200);
+
+	SetTimer(0,200,NULL);
+	SetTimer(1,500,NULL);
+//
+	GetDlgItem(IDC_WARMUP_MODE3)->EnableWindow(TRUE);//150521 HSN PTP Warmup추가
+	GetDlgItem(IDC_WARMUP_MODE1)->EnableWindow(FALSE);
+
+	if(pView->m_nMachineStatus == 0)
+	{
+		pView->m_pMcStatus = new CMcStatus();
+		pView->m_pMcStatus->Create(this);
+		pView->m_pMcStatus->ShowWindow(SW_SHOW);
+	}
+
+//2013.08.03 by tskim
+	 g_bMMGLineDropMode = pDoc->m_structDataEditor.m_bMMGLineDropMode;
+
+	return TRUE;  // return TRUE unless you set the focus to a control
+	              // EXCEPTION: OCX Property Pages should return FALSE
+}
+
+void CManuWarmUp::OnTimer(UINT nIDEvent) 
+{
+	// TODO: Add your message handler code here and/or call default
+//
+	CMainFrame *pFrame = (CMainFrame*)AfxGetMainWnd();
+	CP8CA_LcDispView *pView = (CP8CA_LcDispView*)pFrame->GetActiveView();
+	CP8CA_LcDispDoc *pDoc = (CP8CA_LcDispDoc*)pFrame->GetActiveDocument();
+//
+	static LONG AxisStatusS0 = 0,AxisStatusK0 = 0;
+	DWORD dwIOResultF=0,dwIOResultR=0;
+	BOOL bIOResult=FALSE, bMiniDoorSafetyOK=FALSE;
+	int i=0;
+	static int timer_count=0;
+
+//
+	switch(nIDEvent) 
+	{
+		case 0:
+			if(strcmp( ThreadStage.strMsg1, ThreadStage.strMsgBK )!=0)	// 두 String이 같지 않으면
+			{ m_ctrlMessageWarmUp.SetCaption(ThreadStage.strMsg1); ThreadStage.strMsgBK = ThreadStage.strMsg1;}
+
+			if(pView->m_pDevice->SST_Check(STOP_SWITCH)) 
+			{
+				ThreadStage.ExitFlag = true;
+				if(ThreadStage.WarmUpDummyDrop == TRUE) ThreadStage.WarmUpDummyDrop = FALSE;
+		//		if(m_nModeSelection == 1) 
+		/*		{
+					FAS_MoveStop(1,AXIS_S_MASTER,0);
+					FAS_MoveStop(1,AXIS_Y,0);
+					FAS_MoveStop(3,AXIS_K1,0);
+					FAS_MoveStop(4,AXIS_K3,0);
+					pView->m_pDevice->SyncSetIO(SYNC_AXIS_S,0.0, false); // off
+					FAS_ResetDropQueue(1);	
+					FAS_ResetSpdQueue(2); //2번 보드에 들어 있는 P축 Clear*/
+		//		}
+				//
+				ThreadStage.ManualJobStep=100;
+			}
+			//
+			FAS_GetAxisStatus(AXIS_S_MASTER/BOARD_AXES+1, AXIS_S_MASTER%BOARD_AXES, &AxisStatusS0);
+			FAS_GetAxisStatus(AXIS_K_MASTER/BOARD_AXES+1, AXIS_K_MASTER%BOARD_AXES, &AxisStatusK0);
+			if((AxisStatusS0 & LIMITDETECT)||(AxisStatusK0 & LIMITDETECT)) 
+			{
+				ThreadStage.ExitFlag = true;
+			}
+			if(ThreadStage.bMachineRunning == FALSE)
+			{
+//////////////////////////////////////////////////////////////////////////////////////Warmup 완료후 더미드랍... yamary...Test 필요...
+				if(ThreadStage.WarmUpDummyDrop)
+				{
+					for(i = 0; i < MAX_NOZZLE; i++)
+					{
+						if(pDoc->m_bIsHeadSelected[i] == TRUE)
+						{
+							Drop_Info.manu_head_job[i] = true;
+						}
+						else
+						{
+							Drop_Info.manu_head_job[i] = false;
+						}
+					}
+					ThreadStage.ManualCode = 'M'; 
+					ThreadStage.ManualJobStep = 0;
+					ThreadStage.JobFlag = STAGE_MANUAL;
+					pView->RunThread(THREAD_STAGE);
+					Sleep(200);
+					break;
+				}
+				else if(ThreadStage.WarmUpContiJob == TRUE && ThreadStage.WarmUpCount < ThreadStage.WarmUpTimes)
+				{
+					ThreadStage.WarmUpContiJob = false;
+					if(m_nModeSelection == 1) ThreadStage.ManualCode = 'W'; // 일반 Drop Mode
+					else if(m_nModeSelection == 2) 
+					{
+						g_nDrop_Repeat_Count=0;
+						global_Sequence_Count=0;
+						ThreadStage.ManualCode = 'L'; // Line Drop Mode
+					}
+					else if(m_nModeSelection == 3)		// PTP Mode	
+					{
+						for(int i=0; i<2; i++)
+						{
+							if(m_pAxisChoice[i]->GetCheck())	ThreadStage.WarmUpAxis[i] = TRUE;
+							else	ThreadStage.WarmUpAxis[i] = FALSE;
+						}
+						for(i=0; i<2; i++)
+						{
+							if(ThreadStage.WarmUpAxis[i]==TRUE)
+							{
+								ThreadStage.ManualCode = 'C'; // PTP 구동을 통해 Dummy Run 진행시 이물을 미리 다 떨어뜨리기 위한 동작.
+								break;
+							}
+						}
+						if(i==2)	return;
+						
+					}
+					ThreadStage.WarmUpStop = FALSE;
+					ThreadStage.JobFlag = STAGE_MANUAL;
+					ThreadStage.ExitFlag = false;
+					ThreadStage.ManualJobStep=0;
+					m_nActTime = 0;
+					Sleep(500);
+					pView->RunThread(THREAD_STAGE);
+					break;
+				}
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+				timer_count=0;
+				m_nActTime = 0;
+
+				if(pView->m_nLanguage == 0)
+				ThreadStage.strMsg1 = "구동정지..";
+				else if(pView->m_nLanguage == 1)
+				ThreadStage.strMsg1 = "Stop..";
+				else if(pView->m_nLanguage == 2)
+				ThreadStage.strMsg1 = "運轉停止..";
+
+				FAS_ResetDropQueue(1);
+				FAS_ResetSpdQueue(2); //2번 보드에 들어 있는 P축 Clear
+				//
+				m_ctrlSAxisMoveSpeed.EnableWindow(true);
+				m_ctrlColAxisMoveSpeed.EnableWindow(true);
+				m_ctrlTableLoopCount.EnableWindow(true);
+				//
+//				m_ctrlWarmupMode1.EnableWindow(true);
+				m_ctrlWarmupMode2.EnableWindow(true);
+//				m_ctrlWarmupMode3.EnableWindow(true);
+				m_ctrlSettingTime.EnableWindow(true);
+
+				m_ctrlReturn.EnableWindow(true);
+				m_ctrlWarmupRun.SetBackColor(WHITEGRAY);
+
+				if(m_nModeSelection == 3)	
+				{
+					for(i=0;i<2;i++)
+						m_pAxisChoice[i]->EnableWindow(TRUE);
+				}
+				else
+				{
+					for(i=0;i<2;i++)
+						m_pAxisChoice[i]->EnableWindow(FALSE);
+				}
+
+				// by ckh 2008.12.22
+				FAS_MoveStop(AXIS_S_MASTER/BOARD_AXES+1,AXIS_S_MASTER%BOARD_AXES,0);
+				FAS_MoveStop(AXIS_K_MASTER/BOARD_AXES+1,AXIS_K_MASTER%BOARD_AXES,0);
+				Sleep(50);
+				pView->m_pDevice->SyncSetIO(SYNC_AXIS_S,0.0, false, false); // off
+
+			}
+			else
+			{
+
+				if(pView->m_nLanguage == 0)
+				{
+					if(ThreadStage.strMsg1 == "구동정지..") ThreadStage.strMsg1 = "동작중..";
+				}
+				
+				else if(pView->m_nLanguage == 1)
+				{
+					if(ThreadStage.strMsg1 == "Stop..") ThreadStage.strMsg1 = "Operating..";
+				}
+				else if(pView->m_nLanguage == 2)
+				{
+					if(ThreadStage.strMsg1 == "運轉停止..") ThreadStage.strMsg1 = "동작중..";
+				}
+
+				timer_count++; 	
+
+				if((timer_count%10)==0) 
+				{	
+					m_ctrlWarmupRun.SetBackColor(LIGHTGREEN);
+				}
+				else if((timer_count%5)==0)
+				{
+					m_ctrlWarmupRun.SetBackColor(WHITEGRAY);			
+				}
+				else if(timer_count>100000)	{	timer_count=0;	}
+				
+				m_ctrlSAxisMoveSpeed.EnableWindow(false);
+				m_ctrlColAxisMoveSpeed.EnableWindow(false);
+				m_ctrlTableLoopCount.EnableWindow(false);
+				//
+				m_ctrlWarmupMode1.EnableWindow(false);
+				m_ctrlWarmupMode2.EnableWindow(false);
+				m_ctrlWarmupMode3.EnableWindow(false);
+				m_ctrlReturn.EnableWindow(false);
+				m_ctrlSettingTime.EnableWindow(false);
+
+				for(i=0;i<2;i++)	m_pAxisChoice[i]->EnableWindow(FALSE);
+			}
+//			pFrame->DoEvents();
+			break;
+		case 1:
+			SubTimerActTime();
+//			pFrame->DoEvents();
+			break;
+		default:break;
+	}
+//
+	CDialog::OnTimer(nIDEvent);
+}
+
+void CManuWarmUp::OnPaint() 
+{
+	CPaintDC dc(this); // device context for painting
+	
+	// TODO: Add your message handler code here
+	CPen pen;
+	pen.CreatePen(PS_SOLID,5,DARKBLUE);
+	CPen *pOldPen = (CPen *)dc.SelectObject(&pen);
+
+	dc.MoveTo(0,HEIGHT_YPOS);
+	dc.LineTo(SCREEN_WIDTH,HEIGHT_YPOS);
+
+	dc.MoveTo(0,SCREEN_HEIGHT - HEIGHT_YPOS);
+	dc.LineTo(SCREEN_WIDTH,SCREEN_HEIGHT - HEIGHT_YPOS);
+
+	dc.SelectObject(pOldPen);	
+	
+	// Do not call CDialog::OnPaint() for painting messages
+}
+
+void CManuWarmUp::OnOK() 
+{
+	// TODO: Add extra validation here
+	
+//	CDialog::OnOK();
+}
+
+void CManuWarmUp::OnCancel() 
+{
+	// TODO: Add extra cleanup here
+	
+//	CDialog::OnCancel();
+}
+
+BEGIN_EVENTSINK_MAP(CManuWarmUp, CDialog)
+    //{{AFX_EVENTSINK_MAP(CManuWarmUp)
+	ON_EVENT(CManuWarmUp, IDC_TABLE_LOOP_COUNT, -600 /* Click */, OnClickTableLoopCount, VTS_NONE)
+	ON_EVENT(CManuWarmUp, IDC_WARMUP_MODE1, -600 /* Click */, OnClickWarmupMode1, VTS_NONE)
+	ON_EVENT(CManuWarmUp, IDC_WARMUP_MODE2, -600 /* Click */, OnClickWarmupMode2, VTS_NONE)
+	ON_EVENT(CManuWarmUp, IDC_WARMUP_RUN, -600 /* Click */, OnClickWarmupRun, VTS_NONE)
+	ON_EVENT(CManuWarmUp, IDC_CMD_RETURN, -600 /* Click */, OnClickCmdReturn, VTS_NONE)
+	ON_EVENT(CManuWarmUp, IDC_TABLE_MOVE_SPEED2, -600 /* Click */, OnClickTableMoveSpeed2, VTS_NONE)
+	ON_EVENT(CManuWarmUp, IDC_WARMUP_MODE3, -600 /* Click */, OnClickWarmupMode3, VTS_NONE)
+	ON_EVENT(CManuWarmUp, IDC_COL_MOVE_SPEED, -600 /* Click */, OnClickColMoveSpeed, VTS_NONE)
+	ON_EVENT(CManuWarmUp, IDC_SETTING_TIME, -600 /* Click */, OnClickSettingTime, VTS_NONE)
+	ON_EVENT(CManuWarmUp, IDC_BUZZER, -600 /* Click */, OnClickBuzzer, VTS_NONE)
+	ON_EVENT(CManuWarmUp, IDC_K_STEP_MOVE_LENGTH, -600 /* Click */, OnClickKStepMoveLength, VTS_NONE)
+	ON_EVENT(CManuWarmUp, IDC_K_STEP_MOVE_TIMES, -600 /* Click */, OnClickKStepMoveTimes, VTS_NONE)
+	//}}AFX_EVENTSINK_MAP
+END_EVENTSINK_MAP()
+
+void CManuWarmUp::OnClickTableLoopCount() 
+{
+	Use_TK(m_ctrlTableLoopCount, 1000, 1, 512, 384);
+	ThreadStage.WarmUpTimes = atoi(m_ctrlTableLoopCount.GetCaption());
+}
+
+void CManuWarmUp::OnClickTableMoveSpeed2() 
+{
+	Use_TK(m_ctrlSAxisMoveSpeed, 200 , 5 , 512 , 384); // S axis
+	ThreadStage.WarmUpSpeedS = atof(m_ctrlSAxisMoveSpeed.GetCaption());	
+}
+
+
+void CManuWarmUp::OnClickWarmupMode1() 
+{
+/*	m_ctrlWarmupMode1.SetBackColor(GREEN);
+	m_ctrlWarmupMode2.SetBackColor(WHITEGRAY);
+	m_ctrlWarmupMode3.SetBackColor(WHITEGRAY);
+
+	for(int i=0; i<2; i++)
+	{
+		m_pAxisChoice[i]->EnableWindow(FALSE);
+		m_pAxisChoice[i]->SetCheck(FALSE);
+	}
+
+	m_nModeSelection = 1;*/
+}
+
+void CManuWarmUp::OnClickWarmupMode2() 
+{
+	m_ctrlWarmupMode1.SetBackColor(WHITEGRAY);	
+	m_ctrlWarmupMode2.SetBackColor(GREEN);
+	m_ctrlWarmupMode3.SetBackColor(WHITEGRAY);
+
+	for(int i=0; i<2; i++)
+	{
+		m_pAxisChoice[i]->EnableWindow(FALSE);
+		m_pAxisChoice[i]->SetCheck(FALSE);
+	}
+
+	//2014.03.10 by tskim    //150521 HSN PTP Warmup추가
+	m_pKAxisStepMove->EnableWindow(FALSE);
+	m_pKAxisStepMove->SetCheck(FALSE);
+	GetDlgItem(IDC_LABEL_K_INTERVAL)->EnableWindow(FALSE);
+	GetDlgItem(IDC_LABEL_K_STEP_MOVETIME)->EnableWindow(FALSE);
+	GetDlgItem(IDC_K_STEP_MOVE_LENGTH)->EnableWindow(FALSE);
+	GetDlgItem(IDC_K_STEP_MOVE_TIMES)->EnableWindow(FALSE);	
+	m_nModeSelection = 2;
+}
+
+void CManuWarmUp::OnClickWarmupMode3() // PTP 모드
+{
+	m_ctrlWarmupMode1.SetBackColor(WHITEGRAY);	
+	m_ctrlWarmupMode2.SetBackColor(WHITEGRAY);
+	m_ctrlWarmupMode3.SetBackColor(GREEN);
+
+	for(int i=0; i<2; i++)
+	{
+		m_pAxisChoice[i]->EnableWindow(TRUE);
+		m_pAxisChoice[i]->SetCheck(FALSE);
+	}
+
+	//2014.03.10 by tskim //150521 HSN PTP Warmup추가
+	m_pKAxisStepMove->EnableWindow(TRUE);
+	m_pKAxisStepMove->SetCheck(FALSE);
+	GetDlgItem(IDC_LABEL_K_INTERVAL)->EnableWindow(TRUE);
+	GetDlgItem(IDC_LABEL_K_STEP_MOVETIME)->EnableWindow(TRUE);
+	GetDlgItem(IDC_K_STEP_MOVE_LENGTH)->EnableWindow(TRUE);
+	GetDlgItem(IDC_K_STEP_MOVE_TIMES)->EnableWindow(TRUE);
+
+	m_nModeSelection = 3;	
+
+	g_WarmupPTPmode = TRUE;		//ehji 150527
+}
+
+void CManuWarmUp::OnClickWarmupRun() 
+{
+	CMainFrame* pFrame = (CMainFrame*)AfxGetMainWnd();
+	CP8CA_LcDispDoc* pDoc = (CP8CA_LcDispDoc *)pFrame->GetActiveDocument();
+	CP8CA_LcDispView* pView = (CP8CA_LcDispView*)pFrame->GetActiveView();
+
+	if(ThreadStage.bMachineRunning == TRUE)
+		return;
+//
+	
+	CNormalMsg dlg;
+	BOOL bSyncIoReady = false;
+	CString strTemp;
+	CString strWarning;
+	
+	dlg.m_strTitle = "조심하세요.";
+	dlg.m_strMsg1 = "Warm Up을 위해 축들이 구동됩니다. 실행하겠습니까?";
+	dlg.m_strMsg2 = "실행하려면 '실행', 아니면 '취소'를 누르십시오.";
+
+	if( dlg.DoModal() == IDOK )
+	{
+		//반송 모드가 선택되지 않았을 경우 확인 차원에서...//
+		if(pDoc->m_structDataEditor.m_bIsTrfOnlyMode != TRUE) //반송 전용 Recipe가 아닐 경우
+		{
+			dlg.m_strTitle = "반송모드 아님.";
+			dlg.m_strMsg1 = "이 모드에서는 실제 액정 토출 동작을 실행합니다. 실행 하시겠습니까.?";
+			dlg.m_strMsg2 = "실행하려면 '실행', 아니면 '취소'를 누르십시오.";
+
+			if( dlg.DoModal() == IDOK )
+			{
+				if(pView->m_pDevice->Stage_glass_check()==FALSE && (m_nModeSelection != 3)) //정상모드이면서 glass가 없을 경우 진행을 안한다.//
+				{
+					AfxMessageBox("Stage위에 Glass가 없어 실행할 수 없습니다.");
+					return;
+				}
+				else
+				{
+					//고객 요청에 의한 log 저장...//
+					// by ckh 2008.12.22 Log 수정
+					strTemp.Format("CManuWarmUp: Warm-Up 구동 시작 -> %d",m_nModeSelection);
+					pView->SaveLog(0, strTemp);
+					Sleep(100);
+					pView->SaveLog(0, "CManuWarmUp: 정상 모드 선택");
+
+
+					ThreadStage.WarmUpCount = 0;
+					ThreadStage.WarmUpContiJob = false;
+					ThreadStage.WarmUpStop = FALSE;
+					if(m_nModeSelection == 1) ThreadStage.ManualCode = 'W'; // 일반 Drop Mode
+					else if(m_nModeSelection == 2) 
+					{
+						g_nDrop_Repeat_Count=0;
+						global_Sequence_Count=0;
+						ThreadStage.ManualCode = 'L'; // Line Drop Mode
+					}
+					else if(m_nModeSelection == 3)		// PTP Mode	
+					{
+						for(int i=0; i<2; i++)
+						{
+							if(m_pAxisChoice[i]->GetCheck())	ThreadStage.WarmUpAxis[i] = TRUE;
+							else	ThreadStage.WarmUpAxis[i] = FALSE;
+						}
+						for(i=0; i<2; i++)
+						{
+							if(ThreadStage.WarmUpAxis[i]==TRUE)
+							{
+								ThreadStage.ManualCode = 'C'; // PTP 구동을 통해 Dummy Run 진행시 이물을 미리 다 떨어뜨리기 위한 동작.
+								break;
+							}
+						}
+						if(i==2)
+						{
+							AfxMessageBox("S축, K축 중 최소 1개의 축은 설정되어야 합니다.!!");
+							return;
+						}
+
+//2014.03.10 by tskim //150521 HSN PTP Warmup추가
+						if(ThreadStage.WarmUpAxis[1]==TRUE)
+						{
+							if(m_pKAxisStepMove->GetCheck())
+								ThreadStage.bWarmUpAxisStepMove[1] = TRUE;
+							else
+								ThreadStage.bWarmUpAxisStepMove[1] = FALSE;
+							ThreadStage.bWarmUpAxisStepMove[0] = FALSE;
+						}
+						else
+						{
+							ThreadStage.bWarmUpAxisStepMove[0] = ThreadStage.bWarmUpAxisStepMove[1] = FALSE;
+						}
+					}
+					else return;
+
+					if(PC_TYPE == TRUE)
+					{
+						if(m_nModeSelection==3)
+							bSyncIoReady =pView->m_pDevice->SyncSetIO(SYNC_AXIS_S,0.0, false, false); // off
+						else
+							bSyncIoReady =pView->m_pDevice->SyncSetIO(SYNC_AXIS_S,0.0, true, false); // on
+
+						if(bSyncIoReady == FALSE) 
+						{
+							AfxMessageBox("IO 설정실패");
+							return;
+						}
+						//
+						m_ctrlSAxisMoveSpeed.EnableWindow(false);
+						//
+						m_ctrlTableLoopCount.EnableWindow(false);
+						m_ctrlWarmupMode1.EnableWindow(false);
+						m_ctrlWarmupMode2.EnableWindow(false);
+						m_ctrlWarmupMode3.EnableWindow(false);
+
+						m_ctrlReturn.EnableWindow(false);
+
+						for(int i=0;i<2;i++)	m_pAxisChoice[i]->EnableWindow(false);
+
+						ThreadStage.JobFlag = STAGE_MANUAL;
+						ThreadStage.ExitFlag = false;
+						ThreadStage.ManualJobStep=0;
+						// Timer_Count = 0;
+
+						pView->RunThread(THREAD_STAGE);
+						Sleep(200);
+						while(1) 
+						{
+							if(ThreadStage.bMachineRunning == TRUE) { ThreadStage.strMsgBK="";  break;}
+							pFrame->DoEvents(); 
+						}			
+					}
+				}
+			}
+		}
+		else
+		{
+			//고객 요청에 의한 log 저장...//
+			// by ckh 2008.12.22 Log 수정
+			strTemp.Format("CManuWarmUp: Warm-Up 구동 시작 -> %d",m_nModeSelection);
+			pView->SaveLog(0, strTemp);
+			Sleep(100);
+			pView->SaveLog(0, "CManuWarmUp: 반송 모드 선택");
+
+			ThreadStage.WarmUpCount = 0;
+			ThreadStage.WarmUpContiJob = false;
+			ThreadStage.WarmUpStop = FALSE;
+			if(m_nModeSelection == 1) ThreadStage.ManualCode = 'W'; // 일반 Drop Mode
+			else if(m_nModeSelection == 2) 
+			{
+				g_nDrop_Repeat_Count=0;
+				global_Sequence_Count=0;
+				ThreadStage.ManualCode = 'L'; // Line Drop Mode
+			}
+			else if(m_nModeSelection == 3)		// PTP Mode	
+			{
+				for(int i=0; i<2; i++)
+				{
+					if(m_pAxisChoice[i]->GetCheck())	ThreadStage.WarmUpAxis[i] = TRUE;
+					else	ThreadStage.WarmUpAxis[i] = FALSE;
+				}
+				for(i=0; i<2; i++)
+				{
+					if(ThreadStage.WarmUpAxis[i]==TRUE)
+					{
+						ThreadStage.ManualCode = 'C'; // PTP 구동을 통해 Dummy Run 진행시 이물을 미리 다 떨어뜨리기 위한 동작.
+						break;
+					}
+				}
+				if(i==2)
+				{
+					AfxMessageBox("S축, K축 중 최소 1개의 축은 설정되어야 합니다.!!");
+					return;
+				}
+//2014.03.10 by tskim //150521 HSN PTP Warmup추가
+				if(ThreadStage.WarmUpAxis[1]==TRUE)
+				{
+					if(m_pKAxisStepMove->GetCheck())
+						ThreadStage.bWarmUpAxisStepMove[1] = TRUE;
+					else
+						ThreadStage.bWarmUpAxisStepMove[1] = FALSE;
+					ThreadStage.bWarmUpAxisStepMove[0] = FALSE;
+					double dKAxisMinusLimitDistance = -3000;//원점기준 K축 JOG 구동시 (-)Limit 거리값/1000, 실제 Limit를 감지하기 전 거리여야 겠지? 
+					double dKAxisStroke = -3000 - (pDoc->m_dTeachData[5][2]);//K축 이동 가능 거리
+					strWarning.Format("<PTP Warm UP>K축 Step Move 총 이동거리(%0.f),K축 Stroke(%.0f)",ThreadStage.dWarmUp_KAxis_StepMove_Length * ThreadStage.nWarmUp_KAxis_StepMove_Times,fabs(dKAxisStroke));
+					pView->SaveLog(0,strWarning);
+					if(fabs(dKAxisStroke) < ThreadStage.dWarmUp_KAxis_StepMove_Length * ThreadStage.nWarmUp_KAxis_StepMove_Times)
+					{
+						strWarning.Format("<Warning>K축 Step Move 총 이동거리(%0.f)가 K축 Stroke(%.0f)보다 큽니다..!!",ThreadStage.dWarmUp_KAxis_StepMove_Length * ThreadStage.nWarmUp_KAxis_StepMove_Times,fabs(dKAxisStroke));
+						pView->SaveLog(0,strWarning);
+						AfxMessageBox(strWarning);
+						return;						
+					}
+				}
+				else
+				{
+					ThreadStage.bWarmUpAxisStepMove[0] = ThreadStage.bWarmUpAxisStepMove[1] = FALSE;
+				}
+				
+			}
+			else return;
+
+			if(PC_TYPE == TRUE)
+			{
+				if(m_nModeSelection==3)
+					bSyncIoReady =pView->m_pDevice->SyncSetIO(SYNC_AXIS_S,0.0, false, false); // off
+				else
+					bSyncIoReady =pView->m_pDevice->SyncSetIO(SYNC_AXIS_S,0.0, true, false); // on
+
+				if(bSyncIoReady == FALSE) 
+				{
+					AfxMessageBox("IO 설정실패");
+					return;
+				}
+				//
+				m_ctrlSAxisMoveSpeed.EnableWindow(false);
+				//
+				m_ctrlTableLoopCount.EnableWindow(false);
+				m_ctrlWarmupMode1.EnableWindow(false);
+				m_ctrlWarmupMode2.EnableWindow(false);
+				m_ctrlWarmupMode3.EnableWindow(false);
+
+				m_ctrlReturn.EnableWindow(false);
+
+				for(int i=0;i<2;i++)	m_pAxisChoice[i]->EnableWindow(false);
+
+				ThreadStage.JobFlag = STAGE_MANUAL;
+				ThreadStage.ExitFlag = false;
+				ThreadStage.ManualJobStep=0;
+				// Timer_Count = 0;
+
+				pView->RunThread(THREAD_STAGE);
+				Sleep(200);
+				while(1) 
+				{
+					if(ThreadStage.bMachineRunning == TRUE) { ThreadStage.strMsgBK="";  break;}
+					pFrame->DoEvents(); 
+				}	
+			}
+		}
+	}
+}
+
+void CManuWarmUp::OnClickCmdReturn() 
+{
+	// by ckh 2009.02.16 워밍에서는 무조건 반송 전용으로 하기 위함. 
+	CMainFrame *pFrame = (CMainFrame*)AfxGetMainWnd();
+	CP8CA_LcDispDoc *pDoc = (CP8CA_LcDispDoc*)pFrame->GetActiveDocument();
+	CP8CA_LcDispView* pView = (CP8CA_LcDispView*)pFrame->GetActiveView();
+	
+	pDoc->m_structDataEditor.m_bIsTrfOnlyMode =m_bIsTRfOnlyMode_Old;
+
+	g_WarmupPTPmode = FALSE;		//ehji 150527
+	
+	//by shin//2009.08.25//MC 관련 TAS 추가...//
+	//Warm-Up Return//???
+	pView->WriteTasMCData(TAS_MC, 14, BIT_ON);
+
+	KillTimer(0);
+	KillTimer(1);
+	OnSaveParam();
+
+	//by shin//2009.08.25//MC 관련 TAS 추가...//
+	//Warm-Up Return//???
+	Sleep(200); //최소 200ms
+	pView->WriteTasMCData(TAS_MC, 14, BIT_OFF);
+	Sleep(100);
+
+	//by shin//2009.08.25//MC 관련 TAS 추가...//
+	//Warm-Up
+	pView->WriteTasMCData(TAS_MC, 13, BIT_OFF);
+	Sleep(10);
+
+	if(pView->m_nMachineStatus == 0)
+	{
+		pView->m_pMcStatus->KillTimer(0);
+		pView->m_pMcStatus->CloseWindow();
+	}
+
+	EndDialog(IDOK);	
+}
+
+void CManuWarmUp::OnClickColMoveSpeed() 
+{
+	// TODO: Add your control notification handler code here
+	Use_TK(m_ctrlColAxisMoveSpeed, 500 , 5 , 512 , 384); // K axis //090702 LGD 전효일S 요청으로 300 -> 500 으로 변경 
+	ThreadStage.WarmUpSpeedK = atof(m_ctrlColAxisMoveSpeed.GetCaption());		
+}
+
+void CManuWarmUp::SubTimerActTime()
+{
+	CString val="";
+	m_pActTime = CTime::GetCurrentTime();
+	m_nActTimeCur=m_pActTime.GetSecond();
+	if(ThreadStage.bMachineRunning == FALSE || ThreadStage.WarmUpDummyDrop == TRUE)  m_nActTimePre = m_nActTimeCur;
+	if(m_nActTimeCur!=m_nActTimePre)
+	{
+		m_nActTimePre=m_nActTimeCur;
+		m_nActTime++;
+		val.Format("%d",m_nActTime);
+		m_ctrlActTime.SetWindowText(val);
+		if((ThreadStage.WarmUpSettingTime != 0)&&(ThreadStage.WarmUpSettingTime <= m_nActTime))
+			ThreadStage.WarmUpStop = TRUE;
+	}
+}
+
+void CManuWarmUp::OnClickSettingTime() 
+{
+	Use_TK(m_ctrlSettingTime, 100000 , 0 , 512 , 384); 
+	ThreadStage.WarmUpSettingTime = atoi(m_ctrlSettingTime.GetCaption());	
+}
+
+void CManuWarmUp::OnSaveParam()
+{
+	CMainFrame* pFrame = (CMainFrame*)AfxGetMainWnd();
+	CP8CA_LcDispDoc* pDoc = (CP8CA_LcDispDoc*)pFrame->GetActiveDocument();
+	FILE *fp;
+	int i = 0;
+	CString strPath ="";
+	strPath.Format("%s\\WarmParm.dat", pDoc->m_strDataPath);
+	fp = fopen(strPath, "wt");
+	if(fp != NULL)
+	{
+		fprintf(fp, "%.0f\n",	ThreadStage.WarmUpSpeedS);
+		fprintf(fp, "%.0f\n",	ThreadStage.WarmUpSpeedK);
+		fprintf(fp, "%d\n",		ThreadStage.WarmUpSettingTime);
+		fprintf(fp, "%d\n",		ThreadStage.WarmUpTimes);
+//2014.03.10 by tskim //150521 HSN PTP Warmup추가
+		fprintf(fp, "%.0f\n",	ThreadStage.dWarmUp_KAxis_StepMove_Length);
+		fprintf(fp, "%d\n",		ThreadStage.nWarmUp_KAxis_StepMove_Times);
+	}
+	// 화일 닫기
+	fclose(fp);
+}
+
+BOOL CManuWarmUp::OnReadParam()
+{
+	CMainFrame* pFrame = (CMainFrame*)AfxGetMainWnd();
+	CP8CA_LcDispDoc* pDoc = (CP8CA_LcDispDoc*)pFrame->GetActiveDocument();
+	ifstream fi;
+	CString strPathName;
+	int i=0;
+	
+	strPathName.Format("%s\\WarmParm.dat", pDoc->m_strDataPath);
+	fi.open((char *)(LPCSTR)strPathName, ios::in);
+
+	if(fi.is_open())
+	{
+		// 측정data를 이용해서 계산된 coefficient
+		fi >> ThreadStage.WarmUpSpeedS;
+		fi >> ThreadStage.WarmUpSpeedK;
+		fi >> ThreadStage.WarmUpSettingTime;
+		fi >> ThreadStage.WarmUpTimes;
+//2014.03.10 by tskim //150521 HSN PTP Warmup추가
+		fi >> ThreadStage.dWarmUp_KAxis_StepMove_Length;
+		fi >> ThreadStage.nWarmUp_KAxis_StepMove_Times;
+	}
+	else
+	{
+		fi.close();
+		return FALSE;
+	}
+	fi.close();
+	return TRUE;
+}
+
+void CManuWarmUp::OnClickBuzzer() 
+{
+	CMainFrame* pFrame = (CMainFrame*)AfxGetMainWnd();
+	CP8CA_LcDispView* pView = (CP8CA_LcDispView*)pFrame->GetActiveView();
+	//lbg 080701 Buzzer Stop
+	pView->m_pDevice->MNET_WriteBit(BaseAddr_DISPCTRL+BitDispBuzzer,"0000");	
+}
+
+void CManuWarmUp::SelectLanguage()
+{
+	CMainFrame *pFrame = (CMainFrame*)AfxGetMainWnd();
+	CP8CA_LcDispView* pView = (CP8CA_LcDispView*)pFrame->GetActiveView();
+
+	if(pView->m_nLanguage == 0) //ehji 140309 .
+	{
+		//Warming up
+		SetDlgItemText(IDC_LABEL_WARMUP_TITLE,			_T("♣ Warm Up 설정"));
+		SetDlgItemText(IDC_LABEL13,			_T("PTP 모드"));
+		SetDlgItemText(IDC_WARMUP_MODE3,			_T("PTP 모드 동작"));
+		SetDlgItemText(IDC_LABEL2,			_T("Pattern 모드"));
+		SetDlgItemText(IDC_WARMUP_MODE1,			_T("일반 Drop 모드"));
+		SetDlgItemText(IDC_WARMUP_MODE2,			_T("Line Drop 모드"));
+		SetDlgItemText(IDC_LABEL_TABLE_LOOP_COUNT_TITLE,			_T("반복 횟수"));
+		SetDlgItemText(IDC_LABEL_TABLE_LOOP_COUNT_UNIT,			_T("( 회 )"));	
+		SetDlgItemText(IDC_LABEL38,			_T("구동 축 선택"));
+		SetDlgItemText(IDC_CHECK_S,			_T("S축"));
+		SetDlgItemText(IDC_CHECK_K,			_T("K축"));
+		SetDlgItemText(IDC_LABEL_WARMUP_TITLE3,			_T("[ S 축 ]"));
+		SetDlgItemText(IDC_LABEL_WARMUP_TITLE5,			_T("[ K 축 ]"));
+		SetDlgItemText(IDC_LABEL7,			_T("Dummy Drop 주기  (sec)"));
+		SetDlgItemText(IDC_LABEL1,			_T("소요시간(sec)"));
+		SetDlgItemText(IDC_LABEL37,			_T("속도 설정(mm/s))"));
+
+	}
+
+	if(pView->m_nLanguage == 1) //ehji 140309 .
+	{
+		//Warming up
+		SetDlgItemText(IDC_LABEL_WARMUP_TITLE,			_T("♣ Warm Up Setting"));
+		SetDlgItemText(IDC_LABEL13,			_T("PTP Mode"));
+		SetDlgItemText(IDC_WARMUP_MODE3,			_T("PTP Mode Action"));
+		SetDlgItemText(IDC_LABEL2,			_T("Pattern Mode"));
+		SetDlgItemText(IDC_WARMUP_MODE1,			_T("Normal Drop Mode"));
+		SetDlgItemText(IDC_WARMUP_MODE2,			_T("Line Drop Mode"));
+		SetDlgItemText(IDC_LABEL_TABLE_LOOP_COUNT_TITLE,			_T("Repeat Count"));
+		SetDlgItemText(IDC_LABEL_TABLE_LOOP_COUNT_UNIT,			_T("(Count)"));	
+		SetDlgItemText(IDC_LABEL38,			_T("Action Axis Select"));
+		SetDlgItemText(IDC_CHECK_S,			_T("S Axis"));
+		SetDlgItemText(IDC_CHECK_K,			_T("K Axis"));
+		SetDlgItemText(IDC_LABEL_WARMUP_TITLE3,			_T("[S Axis]"));
+		SetDlgItemText(IDC_LABEL_WARMUP_TITLE5,			_T("[K Axis]"));
+		SetDlgItemText(IDC_LABEL7,			_T("Dummy Drop Cycle  (sec)"));
+		SetDlgItemText(IDC_LABEL1,			_T("Time Requird (sec)"));
+		SetDlgItemText(IDC_LABEL37,			_T("Speed Setting(mm/s))"));
+	}
+
+	if(pView->m_nLanguage == 2) //ehji 140309 .
+	{
+		//Warming up
+		SetDlgItemText(IDC_LABEL_WARMUP_TITLE,			_T("♣ Warm Up 設定"));
+		SetDlgItemText(IDC_LABEL13,			_T("PTP 模式"));
+		SetDlgItemText(IDC_WARMUP_MODE3,			_T("PTP 模式 動作"));
+		SetDlgItemText(IDC_LABEL2,			_T("Pattern 模式"));
+		SetDlgItemText(IDC_WARMUP_MODE1,			_T("一般 Drop 模式"));
+		SetDlgItemText(IDC_WARMUP_MODE2,			_T("Line Drop 模式"));
+		SetDlgItemText(IDC_LABEL_TABLE_LOOP_COUNT_TITLE,			_T("反復回數"));
+		SetDlgItemText(IDC_LABEL_TABLE_LOOP_COUNT_UNIT,			_T("( 回 )"));	
+		SetDlgItemText(IDC_LABEL38,			_T("運轉軸選擇"));
+		SetDlgItemText(IDC_CHECK_S,			_T("S軸"));
+		SetDlgItemText(IDC_CHECK_K,			_T("K軸"));
+		SetDlgItemText(IDC_LABEL_WARMUP_TITLE3,			_T("[S 軸]"));
+		SetDlgItemText(IDC_LABEL_WARMUP_TITLE5,			_T("[K 軸]"));
+		SetDlgItemText(IDC_LABEL7,			_T("Dummy Drop 週期  (sec)"));
+		SetDlgItemText(IDC_LABEL1,			_T("需要時間(sec)"));
+		SetDlgItemText(IDC_LABEL37,			_T("速度設定(mm/s))"));
+	}
+}
+
+void CManuWarmUp::OnClickKStepMoveLength() 
+{
+	// TODO: Add your control notification handler code here
+	Use_TK(m_ctrlKAxisStepMoveLength, 1000 , 5 , 512 , 384);
+	ThreadStage.dWarmUp_KAxis_StepMove_Length = atof(m_ctrlKAxisStepMoveLength.GetCaption());	
+}
+
+void CManuWarmUp::OnClickKStepMoveTimes() 
+{
+	// TODO: Add your control notification handler code here
+	Use_TK(m_ctrlKAxisStepMoveTimes, 100 , 1 , 512 , 384); 
+	ThreadStage.nWarmUp_KAxis_StepMove_Times = atof(m_ctrlKAxisStepMoveTimes.GetCaption());		
+}

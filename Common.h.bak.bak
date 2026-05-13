@@ -1,0 +1,373 @@
+ #ifndef __COMMON_H__
+#define	__COMMON_H__
+
+#define SCREEN_WIDTH			1024
+#define SCREEN_HEIGHT			768
+
+#define PC_TYPE					1	// 카드가 없는 상태에서 동작하기 위하여
+									// 실제 작업시는 1 로 변경해야 한다.
+//////////////////////////////////////////////////////////////////////////////
+///실제 장비에서는 반드시 1로 살려야 한다..2013.12.10
+#define CLSS					0     //중앙 공급
+#define _VISION					0	  //Vision
+#define EQ						0	  //장비 2009.12.30 by tskim Test용 나중엔 없애라...노트북 테스트 용 
+#define _SIMULATION				0	  //RunThread(THREAD_IO) Teaching 버튼 누를 시 살림
+#define TRF						EQ    // Interface 공운전 모드(글래스 없는 모드)에 활용 하자.
+#define _SCAN					EQ    // Line Scan 
+#define RMS						EQ    //RMS보고부분
+#define TEST					EQ    //장비모션테스트용 %
+#define N_MODIFY_EQ				1   //장비에서는 반드시 주석 해제 해야 함...2013.12.10 by tskim
+#define ENABLE_HEAD_ONLY		1	//1 : 사용하지 않는 해드 움직이지 않음 (1,2라인:0 - 3,4라인: 1)
+#define	_INTERLOCK				1 	  //양산 시 살릴것. 
+
+#define	FAN_ALARM_INTERLOCK		0 	  //TEST 후 살릴 것(0: 사용안함, 1: 사용함)
+#define AUTOKEY_INTERLOCK		0 	  //TEST 후 살릴 것(0: 사용안함, 1: 사용함)
+
+///////////////////////////////////////////////////////////////////////////////
+#define PTN_TARGET				1 // 0: AdjustCondtion Target 적용, 1: Pattern별 Target 적용 
+
+#define LINE1					!ENABLE_HEAD_ONLY
+#define LINE2					LINE1
+#define LINE3					!LINE2
+
+#define WINGS_VISION			EQ
+
+#define HEIGHT_YPOS				70		// 위쪽,아래쪽의 LINE이 떨어진 간격을 설정한다. 
+
+#define BUTTON_SIZE_X			214		//메인에 있는 BUTTON 크기를 설정한다.
+#define BUTTON_SIZE_Y			100
+#define BUTTON_OPEARTOR_X		283//193		// operator mode에서 button x위치
+#define BUTTON_ENGINEER_X		283//283		// engineer mdoe에서 button x 위치
+//
+// cview 에서 timer를 종류별로..	
+#define ID_CLOCK_TIMER			0
+#define ID_OPERATOR_TIMER		1
+#define ID_THREADCHECK_TIMER	2
+#define ID_LIMITDETECT_TIMER	3
+#define ID_REPORT_WORK_TIMER	4
+#define ID_MACHINE_MON_TIMER	5
+#define ID_SPECOUT_TIMER		6
+#define T3_TIMER				7
+#define T3_TIMER_THREADIO		9			//141026 PD DOWN : T3 TIMER in THREAD IO ( STAGE AUTO 내 명령과 겹치지 않도록 한다. ) 			
+#define ID_VISION_TIMEOVER		33
+//2014.05.07 by tskim
+#define ID_DROP_DETECT			8
+#define ID_PDDOWN_CEHCK			10
+
+
+//
+#define MAX_NOZZLE				16		// 계산된데이타Max
+//#define MAX_MEADATA_FORCALIB	15		// calib를 위해 측정된 data Max
+#define MAX_MEASURED_DATA		500		// 측정된$데이타Max
+//#define MAX_TIME				50		// 단위 (sec)// Balance응답이 MAX_TIME이 지나도 없을때...
+#define MAX_TIME				300		//by ckh 2009.03.10 120에서 변경	// 단위 (sec)// Balance응답이 MAX_TIME이 지나도 없을때...
+#define SUPPLY_OFF				0 //20		// by ckh 2009.03.20 중앙 공급시에만 사용함. 오차가 발생됨으로.
+#define MAX_MCSTATUS			3		// by ckh 2009.03.24 장비 상태 .
+
+#define ADJUSTING_COEF			0.3
+#define DOOROPEN_DELAY			1000	// 1(sec)
+#define MAX_RECIPE				1000
+
+//161214 VISION PART SCAN //JYKIM 161219 PART SCAN 180K
+#define PART_SCAN_START			0
+#define PART_SCAN_MOTIONNING	1
+#define PART_SCAN_FINISH		2
+
+// Balance 번호에 해당하는 Serial 번호를 설정한다.
+#define BAL1					1
+#define BAL2					2
+#define BAL3					3
+#define BAL4					4
+#define BAL5					5
+#define BAL6					6
+#define BAL7					7
+#define BAL8					8
+
+#define SUPPLY_BAL1				9 //7
+#define SUPPLY_BAL2				10 //8
+#define SUPPLY_BAL3				11 //9
+#define SUPPLY_BAL4				12 //10
+
+// Thread Manual/ Operation의 JobFlag구분
+#define OPER_JOG				1
+#define OPER_ORG_SEL			2
+#define OPER_ORG_ALL			3
+
+// Thread 선택구분
+#define THREAD_STAGE				0
+#define THREAD_BALANCE1				1
+#define THREAD_BALANCE2				2
+#define THREAD_BALANCE3				3
+#define THREAD_BALANCE4				4
+#define THREAD_BALANCE5				5
+#define THREAD_BALANCE6				6
+#define THREAD_BALANCE7				7
+#define THREAD_BALANCE8				8
+
+#define THREAD_IO					9  //7
+#define THREAD_ORIGINALL			10 //8
+#define THREAD_ONLY_BALANCE1		11 //9
+#define THREAD_ONLY_BALANCE2		12 //10
+#define THREAD_ONLY_BALANCE3		13 //11
+#define THREAD_ONLY_BALANCE4		14 //12
+#define THREAD_SUPPLY_BAL1			15 //13
+#define THREAD_SUPPLY_BAL2			16 //14
+// by ckh 
+#define THREAD_POS_CHK				17 //15
+#define THREAD_VISION_DETECT		18
+
+//Thread No//
+#define THREAD_NO	19 //16
+
+// thread stage 안에서의 구분
+#define STAGE_AUTO				0
+#define STAGE_MANUAL			1
+
+// adjust/measure부분에서 timer구분
+#define TIMER_ADJUST				0
+#define TIMER_INITMOVE				1
+#define TIMER_ADJUST_MEASUREDISP	2
+#define TIMER_ADJUST_MSGDISP		3
+#define TIMER_BALANCE_MODEDISP		4
+#define TIMER_DROP_COUNT_DISP		5
+
+// adjust initial부분에서 timer구분
+#define TIMER_ADJUSTINIT			0
+#define TIMER_ADJUSTINIT_VOLDISP	1
+#define TIMER_ADJUSTINIT_CALIB		2
+#define TIMER_ADJUSTINIT_LM_DISP	3
+
+// auto부분에서 timer구분
+#define TIMER_AUTO					0
+#define TIMER_AUTO_TFDATAOUT		1
+#define TIMER_AUTO_CLOCK			2
+#define TIMER_AUTO_CYCLE_TIME		3
+#define TIMER_LC_SUPPLY				4
+//#define TIMER_AUTO_SPEC_TIME		4
+//2011.04.27 by tskim
+#define TIMER_AUTO_BAL_MODE			5
+//2014.04.21 by tskim TPD
+#define TIMER_AUTO_TPD				6	
+
+
+// clb time
+#define TIMER_CLB_LCTYPE			0
+
+// auto I/F
+#define TIMER_AUTO_IF				0
+#define TIMER_SCRAP					0
+// Warning,Alarm구분
+/*
+#define ERR_ERROR			0
+#define ERR_WARNING			1
+*/
+
+// 특수정보요구 구분
+#define INFO_AMOUNTADJUST		0
+#define INFO_DOTCANCEL_TFT		1
+#define INFO_DOTCANCEL_CF		2
+
+#define TFT		0
+#define CF		1
+#define Main	0
+#define Sub		1
+//
+#define HEAD_INTERVAL		27.0
+
+// 사용자 정의 메세지
+#define WM_INFODISP					WM_USER+1
+#define WM_MSGARRIVAL				WM_USER+2
+#define WM_AMOUNTDISP				WM_USER+3
+#define WM_MEASUREDISP				WM_USER+4
+#define WM_ERROR					WM_USER+8
+#define	WM_ORG_SEARCH				WM_USER+9
+#define	WM_DOTNUM_DISP				WM_USER+10
+#define	WM_CIMINFO					WM_USER+11
+#define	WM_RUNTHREAD				WM_USER+12
+#define	WM_FTPFILE_DL				WM_USER+13
+#define	WM_CIM_REPORT_WORK			WM_USER+14
+#define	WM_AUTO_MEA_HEAD			WM_USER+15
+#define	WM_REPORT_PANEL_JUDGE		WM_USER+16
+#define WM_TARGET_WEIGHT_MMGDISP	WM_USER+17
+#define WM_GLS_INFORM_SAVE			WM_USER+18
+#define WM_CANISTER_DATA			WM_USER+19
+#define WM_VISION_INIT				WM_USER+22	//ehji 140804
+///////////////////////////////////////////////////////////////////
+// by ckh 사용자 정의 메세지
+#define WM_POSCHK_MSG				WM_USER+20
+#define WM_TAS_MSG					WM_USER+21 
+#define WM_OPEN_LOCK_DISP			WM_USER+24 //20181130 jeongyong - DoorInterlock 추가 
+
+#define ERR_PULSE	15
+#define NOZZLE_G1	12
+#define NOZZLE_G2	4
+#define NOZZLE_P1	14
+#define NOZZLE_P2	2
+#define NOZZLE_S1	12
+#define NOZZLE_S2	4
+#define INPOSITION_DELAY	10
+#define GATE_ORIGIN_OFFSET	10
+#define BASE_PULSE	820.0 //5pi//32000 
+#define PUMP_LIMIT 380
+#define PI	3.141592654	
+
+#define SUCTION_START_SPEED 2000.0		
+
+//dummy cup 2종류에 따른 position shift
+#define DUMMY_ADD 51.93//150
+#define DUMMY_CUP_LIMIT 70
+
+#define MAX_CUP_WEIGHT 10
+
+//중앙 공급 관련 define
+//공급 압력 0.2Mpa에서 초당 약 7g정도 공급 된다...// max값으로 막는다 (약 15g)
+#define SUPPLY_LIMIT_WEIGHT 15.0 
+
+#define MUX1			0
+#define MUX2			1
+#define PATTERN_NO			10
+
+//중앙 공급 관련 Can초기 무게//
+#define CAN_WEIGHT	2.0
+
+//Motor 주행 거리 Resolution//
+//1KM = 1000000mm
+#define MOTOR_RES	0.000001;
+
+//////////////   BLOB 기능 관련 변수 정의 ///////////////////
+
+#define BLOB_CENTER_X	320
+#define BLOB_CENTER_Y	240
+
+#define BLOB_MIN_POSX	200// 중심점의 범위
+#define BLOB_MAX_POSX	440 // 중심점의 범위
+
+#define BLOB_MIN_POSY	120 // 중심점의 범위
+#define BLOB_MAX_POSY	360 // 중심점의 범위
+
+#define PIXEL_SIZE	0.001	// 픽셀의 실제 크기 10um
+
+//////////////////////////////////////////////////////////////
+
+//TAS_DATA 관련//////////////////////////////////////////////////////
+#define TAS_EXCHANGE				0
+#define TAS_LOADING					1
+#define TAS_LC_SUPPLY				2
+#define TAS_POS_ACCURACY			3
+#define TAS_DOTTING 				4
+#define TAS_BALANCE_MEAS			5
+#define TAS_INSPECT_DOT				6
+#define TAS_DUMMY_DROP  			7
+/////////////////////////////////////////////////////////////////////
+
+//TAS_MC_DATA_관련//
+#define TAS_MC						0
+
+//
+
+// by ckh 2009.02.13 , 티칭값이 인터록 이하로 되게.
+#define POS_LOADING			100		// 반입 위치
+#define POS_SUPPLY			50		// 공급 위치
+#define POS_MEASURE			50		// 측정 위치
+
+//강제 측정 주기 관련//
+////////////////////////////////////////////////////
+#define INIT_MEASURE_COUNT			5
+#define INIT_MEASURE_MAX_COUNT	    15
+///////////////////////////////////////////////////
+
+//중앙 공급량 offset//
+#define SUPPLUY_OFFSET_WEIGHT	 10
+
+#define MAX_BAL					8
+
+#define ALIGN_REF_H		10
+#define ALIGN_REF_V		10
+
+#define BALID1			0
+#define BALID2			1
+#define BALID3			2
+#define BALID4			3
+#define BALID5			4
+#define BALID6			5
+#define BALID7			6
+#define BALID8			7
+
+#define BAL_WEIGHT		5
+#define CAMH			640
+#define CAMV			480
+//헤드 간격 //2010.02.25 by tskim
+#define HEAD_DIST		115
+#define P_DELAY			50
+#define N_DELAY			100
+#define BAL_DELAY1		5000
+
+//2011.05.12 by tskim Cabikration 
+#define MAX_MEADATA_FORCALIB    2
+#define MAX_MEADATA_GETCOUNT1	3
+#define MAX_MEADATA_GETCOUNT2	12
+#define MAX_MEADATA_GETCOUNT3	30//2015.01.24 by tskim 진행 방향 Panel 배열 30개, 하지만 발란스 최소 측정량(30mg)을 고려 하면 배열 갯수는 적어야 함...
+#define SECTION_CAL_1STBLOCK	0//2015.01.24 by tskim 
+#define PUMP_LIMIT2 360 
+
+//2011.07.11 by tskim MC Navi
+#define	LC_CHANGE			0
+#define	LC_SUPPLY			1
+#define	LC_DEGAS			2
+#define	LC_ADJUST			3
+#define	LC_MEASURE			4
+#define	LC_DROPCNT			5
+#define	LC_WARMUP			6
+#define	LC_LOADING			7
+#define	LC_DOTTING			8
+#define	LC_DOTTINGCHK		9
+#define	LC_MCCOMPLETE		10
+
+#if LINE3
+	#define N_PORT				18//2015.02.10 by tskim Comport shift 16->18
+#else
+	#define N_PORT				16
+#endif 
+
+//OFFSET 으로 적용. DB X 
+//#define MAX_LINE_NO			2
+//#define MAX_MACHINE_NO		2
+//#define MAX_MATERIAL_NO		10
+//#define MAX_TARGET_NO		20
+//#define MAX_DB_NO			MAX_LINE_NO*MAX_MACHINE_NO*MAX_HEAD_NO*MAX_MATERIAL_NO*MAX_TARGET_NO
+
+#define MAX_HEAD_NO			MAX_NOZZLE
+#define MAX_DB_NO			MAX_HEAD_NO*MAX_RECIPE
+
+/////////////////////////////DB HISTORY LOG
+//BIG CARTEGORY
+#define DB_NEW_REGISTRY					  1
+#define DB_MATERIAL_REGISTRY_CLB		  2
+#define DB_MATERIAL_REGISTRY_MANUAL_MEAS  3
+#define DB_ALARM						  4
+#define DB_RUN							  5
+
+//SMAL CARTEGORY
+#define REG_MODULE_INFORM				  0
+#define REG_RECIPE_INFORM				  1
+
+#define CLB_MODULE_INFORM				  0
+#define CLB_RECIPE_INFORM				  1
+#define CLB_OFFSET_INFORM				  2
+#define CLB_TOTAL_INFORM				  3
+
+#define MEAS_MODULE_INFORM				  0
+#define MEAS_MEASURE_INFORM				  1
+#define MEAS_RECIPE_INFORM				  2
+#define MEAS_OFFSET_INFORM				  3
+#define MEAS_TOTAL_INFORM				  4
+
+#define ALM_ALARM_INFORM				  0
+#define ALM_MODULE_INFORM				  1
+#define ALM_PROCESS_INFORM				  2
+///////////////////////////////////////////
+
+#define	BarCode_Com1		13
+#define	BarCode_Com2		14
+
+#endif

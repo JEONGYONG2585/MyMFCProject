@@ -1,0 +1,844 @@
+// ManuIO.cpp : implementation file
+//
+
+#include "stdafx.h"
+#include "P8CA_LcDisp.h"
+#include "MainFrm.h"
+#include "P8CA_LcDispView.h"
+#include "P8CA_LcDispDoc.h"
+//
+#include "ManuIO.h"
+#include <fstream.h> // >> 연산자 사용
+#include "PVG.h"
+#include "Piezostatus.h"
+
+#ifdef _DEBUG
+#define new DEBUG_NEW
+#undef THIS_FILE
+static char THIS_FILE[] = __FILE__;
+#endif
+
+//
+#define IO_TIMER 0
+/////////////////////////////////////////////////////////////////////////////
+// CManuIO dialog
+
+
+CManuIO::CManuIO(CWnd* pParent /*=NULL*/)
+	: CDialog(CManuIO::IDD, pParent)
+{
+	//{{AFX_DATA_INIT(CManuIO)
+	//}}AFX_DATA_INIT
+	for( int i = 0 ; i < 4 ; i++) // board갯수 4장
+		{
+			for( int j = 0; j < 64 ; j++)  //
+			{
+				m_structIOCaptionSet[i].strInput[j] = "";
+				m_structIOCaptionSet[i].strOutput[j] = "";
+				m_structIOCaptionSet[i].strInput_Index[j] = "";
+				m_structIOCaptionSet[i].strOutput_Index[j] = "";
+				//
+				if( j < 16 )	m_structIOCaptionSet[i].strAxis[j] = "";
+			}
+		}
+//
+	for(i = 0 ; i < 64 ; i++) // 접점 갯수 In/Out각 64개
+	{
+		m_bInputStatus[i] = false;  m_bInputStatusBK[i] = false;
+		m_bOutputStatus[i] = false; m_bOutputStatusBK[i] = false;
+	}
+// 타이머로 동작하므로 초기화는 True로 함. // by ckh 
+	for(i = 0 ; i < 16 ; i++)
+		for(int j = 0 ; j < 5 ; j++)
+		{ m_bAxisStatus[i][j] = true; m_bAxisStatusBK[i][j] = true;}
+
+//
+	m_nBdSel = 1; // 3번째 bd
+
+	m_bPressureView = FALSE;
+}
+
+CManuIO::~CManuIO()
+{
+}
+
+void CManuIO::DoDataExchange(CDataExchange* pDX)
+{
+	CDialog::DoDataExchange(pDX);
+	//{{AFX_DATA_MAP(CManuIO)
+	DDX_Control(pDX, IDC_CMD_BOARD_SEL1, m_ctrlBdSel1);
+	DDX_Control(pDX, IDC_CMD_BOARD_SEL2, m_ctrlBdSel2);
+	DDX_Control(pDX, IDC_CMD_BOARD_SEL3, m_ctrlBdSel3);
+	DDX_Control(pDX, IDC_CMD_BOARD_SEL4, m_ctrlBdSel4);
+	DDX_Control(pDX, IDC_MSFLEXGRID_INPUT, m_ctrlInput);
+	DDX_Control(pDX, IDC_MSFLEXGRID_OUTPUT, m_ctrlOutput);
+	DDX_Control(pDX, IDC_MSFLEXGRID_MOTOR, m_ctrlMotorSensor);
+	DDX_Control(pDX, IDC_CMD_MOTOR_SENSOR_TITLE, m_LabelMotorSensor);
+	//}}AFX_DATA_MAP
+}
+
+
+BEGIN_MESSAGE_MAP(CManuIO, CDialog)
+	//{{AFX_MSG_MAP(CManuIO)
+	ON_WM_TIMER()
+	//}}AFX_MSG_MAP
+END_MESSAGE_MAP()
+
+/////////////////////////////////////////////////////////////////////////////
+// CManuIO message handlers
+
+BOOL CManuIO::OnInitDialog() 
+{
+	CMainFrame *pFrame = (CMainFrame *)AfxGetMainWnd();
+	CP8CA_LcDispDoc *pDoc = (CP8CA_LcDispDoc *)pFrame->GetActiveDocument();
+	CDialog::OnInitDialog();
+	
+	SelectLanguage();
+	// TODO: Add extra initialization here
+	// height 설정..
+//
+	int i = 0 , j = 0;
+	CString strFormat[4] = {"Axis","(+)","(-)","ORG"};
+//
+	// str관련 file을 읽고	IoStr.data
+	SubOpenIOStrFile();
+
+//
+	for(i=0; i<8; i++)
+	{
+		m_ctrlInput.SetRowHeight(i,500);
+		m_ctrlInput.SetColWidth(i,1500);
+		m_ctrlInput.SetGridLineWidth(2);
+
+		m_ctrlOutput.SetRowHeight(i,500);
+		m_ctrlOutput.SetColWidth(i,1500);
+		m_ctrlOutput.SetGridLineWidth(2);
+		m_ctrlInput.SetColAlignment(i,4);
+		m_ctrlOutput.SetColAlignment(i,4);
+	}
+// 	for(i=0; i<8; i++)
+// 	{
+// 		for( j = 0 ; j <8 ; j++ )
+// 		{
+// 			m_ctrlInput.SetRow(i);m_ctrlInput.SetCol(j);
+// 			m_ctrlInput.SetCellFontSize(7);
+// 			m_ctrlOutput.SetRow(i);m_ctrlOutput.SetCol(j);
+// 			m_ctrlOutput.SetCellFontSize(7);
+// 		}
+// 	}
+
+	// motor sensor 부분  fixed row 영역 caption 설정..
+	for( j = 0 ; j < 4 ; j++ )
+	{
+		m_ctrlMotorSensor.SetColWidth(j,500);
+		m_ctrlMotorSensor.SetColWidth(0,1000);
+		m_ctrlMotorSensor.SetColAlignment(j,4);
+		m_ctrlMotorSensor.SetTextMatrix(0,j,strFormat[j]);
+	}
+
+	for( j = 0 ; j < 17 ; j++)
+	{
+		m_ctrlMotorSensor.SetRowHeight(j,360);
+		m_ctrlMotorSensor.SetGridLineWidth(2);//1
+	}
+	
+//	IoStr.data에서 읽어온 data설정
+	SubDisplayIOStr();
+
+	m_ctrlBdSel1.SetBackColor(GREEN); // dialog 처음 시작할 때, m_nBdSel = 3 이므로..
+
+	m_bPressureView = FALSE;
+	m_LabelMotorSensor.SetCaption("MOTOR SENSOR");
+
+//	if(pDoc->m_nSite == 0)
+//		GetDlgItem(IDC_PREES)->EnableWindow(FALSE);
+
+	//
+	if(PC_TYPE == TRUE) SetTimer(IO_TIMER,500,NULL);
+
+
+//
+	return TRUE;  // return TRUE unless you set the focus to a control
+	              // EXCEPTION: OCX Property Pages should return FALSE
+}
+
+void CManuIO::OnOK() 
+{
+	// TODO: Add extra validation here
+
+//	CDialog::OnOK();
+}
+
+void CManuIO::OnCancel() 
+{
+	// TODO: Add extra cleanup here
+	
+//	CDialog::OnCancel();
+}
+
+BEGIN_EVENTSINK_MAP(CManuIO, CDialog)
+    //{{AFX_EVENTSINK_MAP(CManuIO)
+	ON_EVENT(CManuIO, IDC_CMD_BOARD_SEL1, -600 /* Click */, OnClickCmdBoardSel1, VTS_NONE)
+	ON_EVENT(CManuIO, IDC_CMD_BOARD_SEL2, -600 /* Click */, OnClickCmdBoardSel2, VTS_NONE)
+	ON_EVENT(CManuIO, IDC_CMD_BOARD_SEL3, -600 /* Click */, OnClickCmdBoardSel3, VTS_NONE)
+	ON_EVENT(CManuIO, IDC_CMD_BOARD_SEL4, -600 /* Click */, OnClickCmdBoardSel4, VTS_NONE)
+	ON_EVENT(CManuIO, IDC_MSFLEXGRID_OUTPUT, -600 /* Click */, OnClickMsflexgridOutput, VTS_NONE)
+	ON_EVENT(CManuIO, IDC_CMD_RETURN, -600 /* Click */, OnClickCmdReturn, VTS_NONE)
+	ON_EVENT(CManuIO, IDC_CMD_MOTOR_SENSOR_TITLE, -600 /* Click */, OnClickCmdMotorSensorTitle, VTS_NONE)
+	ON_EVENT(CManuIO, IDC_PREES, -600 /* Click */, OnClickPrees, VTS_NONE)
+	ON_EVENT(CManuIO, IDC_PVG, -600 /* Click */, OnClickPvg, VTS_NONE)
+	ON_EVENT(CManuIO, IDC_CMD_PIEZO_STATUS, -600 /* Click */, OnClickCmdPiezoStatus, VTS_NONE)
+	//}}AFX_EVENTSINK_MAP
+END_EVENTSINK_MAP()
+
+void CManuIO::OnClickCmdBoardSel1() 
+{
+	m_bPressureView = FALSE;
+	m_LabelMotorSensor.SetCaption("MOTOR SENSOR");	
+	m_ctrlMotorSensor.Clear();
+	IOView();
+	SubBdSelBtnColor();
+	m_ctrlBdSel1.SetBackColor(GREEN);
+	//
+	m_nBdSel = 1;
+	SubDisplayIOStr();	
+}
+
+void CManuIO::OnClickCmdBoardSel2() 
+{
+	m_bPressureView = FALSE;
+	m_LabelMotorSensor.SetCaption("MOTOR SENSOR");
+	m_ctrlMotorSensor.Clear();
+	IOView();
+	SubBdSelBtnColor();
+	m_ctrlBdSel2.SetBackColor(GREEN);
+	//
+	m_nBdSel = 2;
+	SubDisplayIOStr();	
+}
+
+void CManuIO::OnClickCmdBoardSel3() 
+{
+	m_bPressureView = FALSE;
+	m_LabelMotorSensor.SetCaption("MOTOR SENSOR");	
+	m_ctrlMotorSensor.Clear();
+	IOView();
+	SubBdSelBtnColor();
+	m_ctrlBdSel3.SetBackColor(GREEN);
+	//
+	m_nBdSel = 3;
+	SubDisplayIOStr();	
+}
+
+void CManuIO::OnClickCmdBoardSel4() 
+{
+	m_bPressureView = FALSE;
+	m_LabelMotorSensor.SetCaption("MOTOR SENSOR");	
+	m_ctrlMotorSensor.Clear();
+	IOView();
+	SubBdSelBtnColor();
+	m_nBdSel = 4;
+	//
+	m_ctrlBdSel4.SetBackColor(GREEN);
+	SubDisplayIOStr();	
+	
+}
+
+void CManuIO::OnClickMsflexgridOutput() 
+{// IoStr.data에서 읽어들인 str설정..
+	int row = 0 , col = 0;
+	BOOL IO_RESULT = FALSE;
+	WORD wBitNo = 0;
+	DWORD dwIoOutputStatus = 0 , temp_OutputStatus=0;
+	//
+	row = m_ctrlOutput.GetMouseRow();
+	col = m_ctrlOutput.GetMouseCol();
+
+	// by ckh 2008.12.16
+	if(m_nBdSel == 4)
+	{
+		if(row> 3)
+			return;
+	}
+
+	wBitNo = row*8 + col ; // 참조하려는 bit no 을 찾아서..
+
+	if(PC_TYPE == FALSE)
+	{
+		if(m_ctrlOutput.GetCellBackColor() == LIGHTGREEN) // 출력 on이면..
+		{
+			m_ctrlOutput.SetCellBackColor(WHITE);
+		}
+		else // WHITE
+		{
+			m_ctrlOutput.SetCellBackColor(LIGHTGREEN);
+		}
+		//
+		return;
+	}
+	else
+	{
+		/// hardware 참조는 여기부터..
+		// int FAS_GetIoOutputStatus(int iBdID, DWORD *dwIoOutputStatus);
+		if(wBitNo < 32) // LOW AREA
+		{
+			FAS_GetIoOutputStatus(m_nBdSel, true,&dwIoOutputStatus);
+			temp_OutputStatus = dwIoOutputStatus >> wBitNo;
+			if((temp_OutputStatus & 0x00000001)!=0) // 출력 on이면..
+			{
+				FAS_SetIoBit(m_nBdSel,true,wBitNo,false);
+				m_ctrlOutput.SetCellBackColor(WHITE);
+			}
+			else
+			{
+				FAS_SetIoBit(m_nBdSel,true,wBitNo,true);
+				m_ctrlOutput.SetCellBackColor(WHITEGREEN);
+			}
+		}
+		else // HIGH AREA
+		{
+			wBitNo=wBitNo-32;
+			FAS_GetIoOutputStatus(m_nBdSel, false,&dwIoOutputStatus);
+			temp_OutputStatus = dwIoOutputStatus >> wBitNo;
+			if((temp_OutputStatus & 0x00000001)!=0) // 출력 on이면..
+			{
+				FAS_SetIoBit(m_nBdSel,false,wBitNo,false);
+				m_ctrlOutput.SetCellBackColor(WHITE);
+			}
+			else
+			{
+				FAS_SetIoBit(m_nBdSel,false,wBitNo,true);
+				m_ctrlOutput.SetCellBackColor(WHITEGREEN);
+			}
+		}
+	}
+	UpdateData(false);
+//
+}
+
+void CManuIO::OnClickCmdReturn() 
+{
+	// TODO: Add your control notification handler code here
+	if(PC_TYPE == TRUE) KillTimer(IO_TIMER);
+
+	EndDialog(IDOK);
+}
+
+void CManuIO::SubOpenIOStrFile()
+{
+	CMainFrame *pFrame = (CMainFrame *)AfxGetMainWnd();
+	CP8CA_LcDispView *pView = (CP8CA_LcDispView *)pFrame->GetActiveView();
+
+	// IoStr.dat 화일을 열고서 임시저장
+	ifstream fi;
+	char ch[256];
+	int i = 0, j = 0;
+	CString strTemp;
+	int nstrLength1,nstrLength2;
+
+	/////////////////////////////////////////////////////////////////////////
+	//lbg 6라인 구별..
+	//if(pView->m_nMachineNo<11) fi.open("D:\\LCDATA_LG_P7\\IoStr.dat", ios::in);
+	//else fi.open("D:\\LCDATA_LG_P7\\IoStr_6Line.dat", ios::in);
+	//////////////////////////////////////////////////////////////////////////
+	if(pView->m_nLanguage == 0)
+	fi.open("D:\\TOP\\P8CA_LC\\P8CA_LC_DATA\\IoStr_kor.dat", ios::in);
+	else if(pView->m_nLanguage == 1)
+	fi.open("D:\\TOP\\P8CA_LC\\P8CA_LC_DATA\\IoStr_eng.dat", ios::in);
+	else if(pView->m_nLanguage == 2)
+	fi.open("D:\\TOP\\P8CA_LC\\P8CA_LC_DATA\\IoStr_chi.dat", ios::in);
+
+	if(fi.is_open())
+	{
+		/// input str
+		for(i = 0 ; i <4 ; i++) //  bd no
+			for(j = 0 ; j < 64 ; j++) // io bo
+			{
+				fi >> ch ;
+				strTemp.Format("%s",ch);
+				nstrLength1 = strTemp.FindOneOf("】");
+				nstrLength2 = strTemp.GetLength();
+				m_structIOCaptionSet[i].strInput_Index[j] = strTemp.Mid(0,nstrLength1+2);
+				m_structIOCaptionSet[i].strInput[j] = strTemp.Mid(nstrLength1+2,nstrLength2);
+			}
+		///	output str
+		for(i = 0 ; i <4 ; i++) //  bd no
+			for(j = 0 ; j < 64 ; j++) // io bd
+			{
+				fi >> ch ;
+				strTemp.Format("%s",ch);
+				nstrLength1 = strTemp.FindOneOf("】");
+				nstrLength2 = strTemp.GetLength();
+				m_structIOCaptionSet[i].strOutput_Index[j] = strTemp.Mid(0,nstrLength1+2);
+				m_structIOCaptionSet[i].strOutput[j] = strTemp.Mid(nstrLength1+2,nstrLength2);
+			}
+		///	axis str
+		for(i = 0 ; i <4 ; i++) //  bd no
+			for(j = 0 ; j < 16 ; j++) // axis bd
+			{
+				fi >> ch ;
+				m_structIOCaptionSet[i].strAxis[j].Format("%s",ch);
+			}
+	}
+	else
+	{
+		AfxMessageBox(" IoStr.dat 파일을 여는것을 실패하였습니다");
+		return;
+	}
+
+	fi.close();
+
+//
+}
+
+void CManuIO::SubDisplayIOStr() 
+{
+	//
+	// IoStr.data에서 읽어들인 str설정..
+	int i = 0 , j = 0;
+
+
+	int nRow = 8, nCol = 8; // by ckh 2008.12.16
+	int nAxis = 16;
+	CString strTempInput,strTempOutput;
+
+	// 4번 보드는 8축임. // by ckh 2008.12.16
+	if(m_nBdSel == 4)
+	{
+		nRow =4;
+		nAxis=16;
+
+		m_ctrlInput.Clear();
+		m_ctrlOutput.Clear();
+	}
+
+
+	for( i = 0 ; i < nRow ; i++ ) //  row
+	{
+		for(  j = 0 ; j < nCol ; j++ )	//	col
+		{
+			// m_ctrlInput & m_ctrlOutput에 str 설정..
+//			m_ctrlInput.SetRow(i);m_ctrlInput.SetCol(j);
+//			m_ctrlInput.SetCellFontSize(7);
+//			m_ctrlOutput.SetRow(i);m_ctrlOutput.SetCol(j);
+//			m_ctrlOutput.SetCellFontSize(7);
+			strTempInput.Format("%s\n%s",m_structIOCaptionSet[m_nBdSel-1].strInput_Index[i*8 + j],m_structIOCaptionSet[m_nBdSel-1].strInput[i*8 + j]);
+			m_ctrlInput.SetTextMatrix(i,j,strTempInput);
+			strTempOutput.Format("%s\n%s",m_structIOCaptionSet[m_nBdSel-1].strOutput_Index[i*8 + j],m_structIOCaptionSet[m_nBdSel-1].strOutput[i*8 + j]);
+			m_ctrlOutput.SetTextMatrix(i,j,strTempOutput);
+
+//			m_ctrlInput.SetTextMatrix(i,j,m_structIOCaptionSet[m_nBdSel-1].strInput[i*8 + j]);
+//			m_ctrlOutput.SetTextMatrix(i,j,m_structIOCaptionSet[m_nBdSel-1].strOutput[i*8 + j]);
+		}
+	}
+//
+	// m_ctrlMotorAxis에 str 설정.. // fixed area 1개씩..
+	for( i = 0 ; i < nAxis ; i++ ) //	row
+		m_ctrlMotorSensor.SetTextMatrix(i+1,0,m_structIOCaptionSet[m_nBdSel-1].strAxis[i]);
+
+	//by ckh 
+	//각 축별 장착된 센서는 다름으로 보드 선택시 장착유무를 확인 한다.
+	// by ckh , 센서 설치 유무 초기화 하기
+	for(i=0; i<16 ; i++)
+	{
+		m_bAxisStatus[i][3] = TRUE; //리미트 센서
+		m_bAxisStatus[i][4] = FALSE; // 홈 센서 
+	}
+
+	if(m_nBdSel == 3)
+	{
+		for(i=0; i<16 ; i++)
+		{
+			if(i<4)
+			{
+				m_bAxisStatus[i][3] = TRUE; //리미트 센서
+				m_bAxisStatus[i][4] = FALSE; // 홈 센서 
+			}
+			else
+			{
+				m_bAxisStatus[i][3] = FALSE; //리미트 센서
+				m_bAxisStatus[i][4] = TRUE; // 홈 센서 
+			}
+		}
+	}
+	else if( m_nBdSel == 4)
+	{
+		for(i=0; i<16 ; i++)
+		{
+			if(i<4)
+			{
+				m_bAxisStatus[i][3] = FALSE; //리미트 센서
+				m_bAxisStatus[i][4] = TRUE; // 홈 센서 
+			}
+			else
+			{
+				m_bAxisStatus[i][3] = FALSE; //리미트 센서
+				m_bAxisStatus[i][4] = FALSE; // 홈 센서 
+			}
+		}
+	}
+
+
+}
+
+void CManuIO::SubBdSelBtnColor() 
+{
+	// 이전에 선택되었던 btn color를 원래대로 돌려놓는다..
+	switch(m_nBdSel)
+	{
+	case 1 :
+		m_ctrlBdSel1.SetBackColor(WHITEGRAY);
+		break;
+	case 2:
+		m_ctrlBdSel2.SetBackColor(WHITEGRAY);
+		break;
+	case 3 :
+		m_ctrlBdSel3.SetBackColor(WHITEGRAY);
+		break;
+	case 4:
+		m_ctrlBdSel4.SetBackColor(WHITEGRAY);
+		break;
+	default:
+		AfxMessageBox("잘못됨..");
+		break;
+	} // end of switch()
+//
+}
+
+void CManuIO::OnTimer(UINT nIDEvent) 
+{
+	CMainFrame *pFrame = (CMainFrame *)AfxGetMainWnd();
+	CP8CA_LcDispView *pView = (CP8CA_LcDispView *)pFrame->GetActiveView();
+
+	// TODO: Add your message handler code here and/or call default
+	DWORD dwInRltLow=0,dwInRltHigh=0,temp_io = 0;
+	DWORD dwOutRltLow=0,dwOutRltHigh=0;
+	LONG AxisStatus = 0;
+	//
+	int i = 0 , j = 0;
+	int iAxisNo = 0;
+	CString str;
+
+	long Resolution[6];
+
+//	input io 부분..
+	FAS_GetIo(m_nBdSel,true,&dwInRltLow);
+	FAS_GetIo(m_nBdSel,false,&dwInRltHigh);
+	
+	// memcpy( dest, source , count )
+	memcpy(m_bInputStatusBK,m_bInputStatus ,sizeof(BOOL)*64);
+	// 선택된 board 의 input io 의 값을 관리변수에 저장한다..
+	for(i = 0 ; i < 64 ; i++)
+	{
+		if(i < 32)	temp_io = dwInRltLow >> i; // Low Area
+		else temp_io = dwInRltHigh >> (i-32); // High Area
+		
+		if( (temp_io & 0x0001) != 0 ) // LSB bit ? 1	
+			m_bInputStatus[i] = true;	
+		else	
+			m_bInputStatus[i] = false;
+	}
+	// m_bInputStatus[i]의 값을 이용해서 control에 color 설정한다..
+	if(m_nBdSel != 4)
+	{
+			for( i = 0 ; i < 8 ; i++ ) //	row
+			for(  j = 0 ; j < 8 ; j++ )	//	col
+			{
+				if(m_bInputStatus[i*8+j] != m_bInputStatusBK[i*8+j])
+				{
+					m_ctrlInput.SetRow(i);	// row
+					m_ctrlInput.SetCol(j);	// col
+					//
+					if(m_bInputStatus[i*8+j] == TRUE)
+						m_ctrlInput.SetCellBackColor(GREEN);
+					else
+						m_ctrlInput.SetCellBackColor(WHITE);
+				}
+			}
+	}
+	else //8032D
+	{
+		for( i = 0 ; i < 4 ; i++ ) //	row
+			for(  j = 0 ; j < 8 ; j++ )	//	col
+			{
+				if(m_bInputStatus[i*8+j] != m_bInputStatusBK[i*8+j])
+				{
+					m_ctrlInput.SetRow(i);	// row
+					m_ctrlInput.SetCol(j);	// col
+					//
+					if(m_bInputStatus[i*8+j] == TRUE)
+						m_ctrlInput.SetCellBackColor(GREEN);
+					else
+						m_ctrlInput.SetCellBackColor(WHITE);
+				}
+			}
+	}
+
+
+//	output io 부분..
+	// int FAS_GetIoOutputStatus(int iBdID, BOOL bIsLow,WORD *wIoOutputStatus);
+	FAS_GetIoOutputStatus(m_nBdSel,true,&dwOutRltLow);
+	FAS_GetIoOutputStatus(m_nBdSel,false,&dwOutRltHigh);
+	// memcpy( dest, source , count )
+	memcpy(m_bOutputStatusBK,m_bOutputStatus ,sizeof(BOOL)*64);	
+	// 선택된 board 의 output io 의 값을 관리변수에 저장한다..
+	for(i = 0 ; i < 64 ; i++)
+	{
+		if(i<32) temp_io = dwOutRltLow >> i;
+		else temp_io = dwOutRltHigh >> (i-32);
+
+		if( (temp_io & 0x0001) != 0 ) // LSB bit ? 1	
+			m_bOutputStatus[i] = true;	
+		else	
+			m_bOutputStatus[i] = false;
+	}
+	// m_bOutputStatus[i]의 값을 이용해서 control에 color 설정한다..
+	for( i = 0 ; i < 8 ; i++ ) //	row
+		for(  j = 0 ; j < 8 ; j++ )	//	col
+		{
+			if(m_bOutputStatus[i*8+j] != m_bOutputStatusBK[i*8+j])
+			{
+				m_ctrlOutput.SetRow(i);	// row
+				m_ctrlOutput.SetCol(j);	// col
+				//
+				if(m_bOutputStatus[i*8+j] == TRUE)
+					m_ctrlOutput.SetCellBackColor(GREEN);
+				else
+					m_ctrlOutput.SetCellBackColor(WHITE);
+			}
+		}
+
+		if(m_bPressureView)// 압력값 표시...
+		{
+			for(i=1;i<6;i++)
+			{
+				m_dPress[i-1] = pView->m_pDevice->GetPressValue(i-1);
+				str.Format("%.0f",m_dPress[i-1]);
+				m_ctrlMotorSensor.SetTextMatrix(i,1,str);
+/////
+// 				FAS_GetAdResult(1,AXIS_P3, &Resolution[0]);
+// 				FAS_GetAdResult(1,AXIS_P4, &Resolution[1]);
+// 				FAS_GetAdResult(1,AXIS_P5, &Resolution[2]);
+// 				FAS_GetAdResult(1,AXIS_P6, &Resolution[3]);
+// 				FAS_GetAdResult(1,AXIS_P7, &Resolution[4]);
+// 				FAS_GetAdResult(1,AXIS_P8, &Resolution[5]);
+// 				str.Format("1->%d\t2->%d\t3->%d\t4->%d\t5->%d\t6->%d\t",Resolution[0],Resolution[1],Resolution[2],Resolution[3],Resolution[4],Resolution[5]);
+// 				pView->SaveLog(0,str);
+
+			}
+		}
+		else//	motor sensor 부분..
+		{
+			// 해당 board의 모든축 상태를 읽어서 m_nAxisStatus[i][0~2]에 저장한다..
+			for(iAxisNo = 0 ; iAxisNo < 16 ; iAxisNo++)
+			{
+				FAS_GetAxisStatus(m_nBdSel, iAxisNo, &AxisStatus);
+				if(AxisStatus & LM_PLUS_DETECT) // LMT+...
+					m_bAxisStatus[iAxisNo][0] = true;
+				else 
+					m_bAxisStatus[iAxisNo][0] = false;
+				//
+				if(AxisStatus & LM_MINUS_DETECT) // LMT-...
+					m_bAxisStatus[iAxisNo][1] = true;
+				else
+					m_bAxisStatus[iAxisNo][1] = false;
+				
+				if(AxisStatus & HOME_DETECT) // 원점...
+					m_bAxisStatus[iAxisNo][2] = true;
+				else 
+					m_bAxisStatus[iAxisNo][2] = false;
+			}
+			
+			// 현찬 : Servo ON/OFF 및 Servo Alarm 상태도 함께 나타내자..
+			// m_bAxisStatus[i]의 값을 이용해서 control에 color 설정한다..
+			for( i = 0 ; i < 16 ; i++ ) //	row
+				for(  j = 0 ; j < 3 ; j++ )	//	col
+				{
+					m_ctrlMotorSensor.SetRow(i+1);
+					m_ctrlMotorSensor.SetCol(j+1);
+					//
+					if(j<2) // +,- 센서 감지 
+					{
+						if(m_bAxisStatus[i][3] == TRUE) // 센서가 있을 경우만  표시함.
+						{
+							if(m_bAxisStatus[i][j] == TRUE)
+								m_ctrlMotorSensor.SetCellBackColor(GREEN);
+							else
+								m_ctrlMotorSensor.SetCellBackColor(WHITE);
+						}
+						else
+							m_ctrlMotorSensor.SetCellBackColor(LIGHTGRAY);
+					}
+					else // Home 센서
+					{
+						if(m_bAxisStatus[i][4] == TRUE) // 센서가 있을 경우만  표시함.
+						{
+							if(m_bAxisStatus[i][j] == TRUE)
+								m_ctrlMotorSensor.SetCellBackColor(GREEN);
+							else
+								m_ctrlMotorSensor.SetCellBackColor(WHITE);
+						}
+						else
+							m_ctrlMotorSensor.SetCellBackColor(LIGHTGRAY);
+					}
+					
+					
+				}
+		}
+
+//	
+	CDialog::OnTimer(nIDEvent);
+}
+
+void CManuIO::PressureView()
+{
+	int i;
+	m_ctrlMotorSensor.SetCols(2);
+	m_ctrlMotorSensor.SetRows(6);
+
+	m_ctrlMotorSensor.SetColWidth(0,1300);
+	m_ctrlMotorSensor.SetColWidth(1,1100);
+
+	CString strIndex[6] = {"HEAD CDA","ION CDA.","Stage VAC.","CAN CDA(L)","CAN CDA(R)"};
+
+	m_ctrlMotorSensor.SetTextMatrix(0,0,"Index");
+	m_ctrlMotorSensor.SetTextMatrix(0,1,"압력 값");
+	for(i=1;i<6;i++)
+	{
+		m_ctrlMotorSensor.SetRowHeight(i,500);
+		m_ctrlMotorSensor.SetTextMatrix(i,0,strIndex[i-1]);
+		m_ctrlMotorSensor.SetRow(i);
+		m_ctrlMotorSensor.SetCol(0);
+		m_ctrlMotorSensor.SetCellBackColor(LIGHTGRAY);
+		m_ctrlMotorSensor.SetRow(i);
+		m_ctrlMotorSensor.SetCol(1);
+		m_ctrlMotorSensor.SetCellBackColor(WHITE);
+	}
+}
+
+void CManuIO::IOView()
+{
+	int i = 0 , j = 0;
+	CString strFormat[4] = {"Axis","(+)","(-)","ORG"};
+
+	m_ctrlMotorSensor.SetCols(4);
+	m_ctrlMotorSensor.SetRows(17);
+
+//
+	// str관련 file을 읽고	IoStr.data
+	SubOpenIOStrFile();
+
+//
+	for(i=0; i<8; i++)
+	{
+		m_ctrlInput.SetRowHeight(i,500);
+		m_ctrlInput.SetColWidth(i,1500);
+		m_ctrlInput.SetGridLineWidth(2);
+	//	m_ctrlInput.SetFontWidth(3);
+
+	//UpdateData(FALSE);
+
+		//
+		m_ctrlOutput.SetRowHeight(i,500);
+		m_ctrlOutput.SetColWidth(i,1500);
+		m_ctrlOutput.SetGridLineWidth(2);
+	}
+
+	// motor sensor 부분  fixed row 영역 caption 설정..
+	for( j = 0 ; j < 4 ; j++ )
+	{
+		m_ctrlMotorSensor.SetColWidth(j,500);
+		m_ctrlMotorSensor.SetColWidth(0,1000);
+		m_ctrlMotorSensor.SetColAlignment(j,4);
+		m_ctrlMotorSensor.SetTextMatrix(0,j,strFormat[j]);
+	}
+
+	for( j = 0 ; j < 17 ; j++)
+	{
+		m_ctrlMotorSensor.SetRowHeight(j,360);
+		m_ctrlMotorSensor.SetGridLineWidth(2);//1
+	}
+	
+//	IoStr.data에서 읽어온 data설정
+	SubDisplayIOStr();
+}
+
+void CManuIO::OnClickCmdMotorSensorTitle() 
+{
+	return;
+	// TODO: Add your control notification handler code here
+	if(m_bPressureView)
+	{
+		m_bPressureView = FALSE;
+		m_LabelMotorSensor.SetCaption("MOTOR SENSOR");	
+		IOView();
+	}
+	else
+	{
+		m_bPressureView = TRUE;
+		m_LabelMotorSensor.SetCaption("PRESSURE VIEW");	
+		PressureView();
+	}		
+}
+
+void CManuIO::OnClickPrees() 
+{
+	// TODO: Add your control notification handler code here
+	if(m_bPressureView)
+	{
+		m_bPressureView = FALSE;
+		m_LabelMotorSensor.SetCaption("MOTOR SENSOR");	
+		m_ctrlMotorSensor.Clear();
+		IOView();
+	}
+	else
+	{
+		m_bPressureView = TRUE;
+		m_LabelMotorSensor.SetCaption("PRESSURE VIEW");	
+		m_ctrlMotorSensor.Clear();
+		PressureView();
+	}			
+}
+
+void CManuIO::OnClickPvg() 
+{
+	// TODO: Add your control notification handler code here
+	CPVG dlg;
+	dlg.DoModal();
+}
+
+void CManuIO::OnClickCmdPiezoStatus() 
+{
+	// TODO: Add your control notification handler code here
+#if N_MODIFY_EQ
+	CPiezoStatus dlg;
+	dlg.DoModal();	
+#endif
+}
+
+void CManuIO::SelectLanguage()
+{
+	CMainFrame *pFrame = (CMainFrame*)AfxGetMainWnd();
+	CP8CA_LcDispView* pView = (CP8CA_LcDispView*)pFrame->GetActiveView();
+
+	if(pView->m_nLanguage == 0)	//ehji 140309
+	{
+		SetDlgItemText(IDC_CMD_INPUT_TITLE,				_T("INPUT 접점"));
+		SetDlgItemText(IDC_CMD_OUTPUT_TITLE,				_T("OUTPUT 접점"));
+		SetDlgItemText(IDC_PREES,				_T("Pressure 표시"));
+	}
+
+	else if(pView->m_nLanguage == 1)	//ehji 140309
+	{
+		SetDlgItemText(IDC_CMD_INPUT_TITLE,				_T("INPUT Point"));
+		SetDlgItemText(IDC_CMD_OUTPUT_TITLE,				_T("OUTPUT Point"));
+		SetDlgItemText(IDC_PREES,				_T("Pressure Indication"));
+	}
+
+	else if(pView->m_nLanguage == 2)	//ehji 140309
+	{
+		SetDlgItemText(IDC_CMD_INPUT_TITLE,				_T("INPUT 接點"));
+		SetDlgItemText(IDC_CMD_OUTPUT_TITLE,				_T("OUTPUT 接點"));
+		SetDlgItemText(IDC_PREES,				_T("Pressure 表示"));
+	}
+}
